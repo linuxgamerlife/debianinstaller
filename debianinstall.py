@@ -62,11 +62,15 @@ REQUIRED_COMMANDS = (
     'fdisk',
     'mount',
     'umount',
-    'debootstrap',
     'chroot',
     '/sbin/mkfs.ext4',
-    '/sbin/mkfs.fat',
     '/sbin/blkid',
+)
+
+LIVE_PREREQUISITE_PACKAGES = (
+    'debootstrap',
+    'dosfstools',
+    'grub-efi-amd64',
 )
 
 
@@ -356,6 +360,8 @@ def collect_warnings(config: Config) -> list[str]:
     missing = missing_commands()
     if missing:
         warnings.append('required host commands are missing: ' + ', '.join(missing))
+    if config.execute:
+        warnings.append('apply mode will install live-environment prerequisites: ' + ', '.join(LIVE_PREREQUISITE_PACKAGES))
     return warnings
 
 
@@ -382,6 +388,8 @@ def render_summary(state: State) -> str:
 
 def run(state: State) -> None:
     save_state(state)
+    if state.config.execute:
+        install_live_prerequisites(state)
     try:
         for phase in PHASES:
             if phase in state.completed_phases:
@@ -456,6 +464,11 @@ def mount_virtual(state: State) -> None:
     run_command(['mount', '--rbind', '/dev', f'{target}/dev'], phase='mount-virtual', state=state)
 
 
+def install_live_prerequisites(state: State) -> None:
+    run_command(['apt-get', 'update'], phase='host-apt-update', state=state)
+    run_command(['apt-get', 'install', '-y', *LIVE_PREREQUISITE_PACKAGES], phase='host-install-prereqs', state=state)
+
+
 def install_packages(state: State) -> None:
     config = state.config
     run_in_chroot(state, ['apt', 'update'], phase='apt-update')
@@ -512,7 +525,17 @@ def install_bootloader(state: State) -> None:
 
 
 def cleanup(state: State) -> None:
-    run_command(['umount', '-R', state.config.target_mount], phase='cleanup', state=state)
+    target = state.config.target_mount
+    cleanup_shells = [
+        f"mountpoint -q {target}/dev/pts && umount -l {target}/dev/pts || true",
+        f"mountpoint -q {target}/dev && umount -R {target}/dev || true",
+        f"mountpoint -q {target}/proc && umount {target}/proc || true",
+        f"mountpoint -q {target}/sys && umount {target}/sys || true",
+        f"mountpoint -q {target}/boot/efi && umount {target}/boot/efi || true",
+        f"mountpoint -q {target} && umount {target} || true",
+    ]
+    for shell_command in cleanup_shells:
+        run_command(['bash', '-lc', shell_command], phase='cleanup', state=state)
 
 
 def run_in_chroot(state: State, command: list[str], *, phase: str) -> None:
