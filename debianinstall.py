@@ -490,11 +490,12 @@ def configure_system(state: State) -> None:
     ])
     run_in_chroot(state, ['bash', '-lc', f"printf '%s\\n' {hostname} > /etc/hostname"], phase='hostname')
     run_in_chroot(state, ['bash', '-lc', f"cat > /etc/hosts <<'EOF'\n{hosts_content}\nEOF"], phase='hosts')
-    run_in_chroot(state, ['bash', '-lc', f"printf '%s UTF-8\\n' {shlex.quote(config.locale)} > /etc/locale.gen && locale-gen && update-locale LANG={shlex.quote(config.locale)}"], phase='locale')
+    run_in_chroot(state, ['bash', '-lc', f"printf '%s UTF-8\\n' {locale} > /etc/locale.gen && locale-gen && update-locale LANG={locale}"], phase='locale')
     run_in_chroot(state, ['ln', '-sf', f'/usr/share/zoneinfo/{config.timezone}', '/etc/localtime'], phase='timezone')
     run_in_chroot(state, ['dpkg-reconfigure', '-f', 'noninteractive', 'tzdata'], phase='timezone')
     run_in_chroot(state, ['bash', '-lc', f"cat > /etc/default/keyboard <<'EOF'\n{keyboard_content}\nEOF"], phase='keyboard')
     run_in_chroot(state, ['dpkg-reconfigure', '-f', 'noninteractive', 'keyboard-configuration'], phase='keyboard')
+    run_in_chroot(state, ['systemctl', 'set-default', 'multi-user.target'], phase='default-target')
     if config.package_profile == 'standard-tty':
         run_in_chroot(state, ['systemctl', 'enable', 'NetworkManager'], phase='services')
         run_in_chroot(state, ['systemctl', 'enable', 'ssh'], phase='services')
@@ -514,8 +515,20 @@ def create_users(state: State) -> None:
     config = state.config
     run_in_chroot(state, ['adduser', '--disabled-password', '--gecos', '', config.username], phase='user')
     run_in_chroot(state, ['usermod', '-aG', 'sudo', config.username], phase='user')
-    run_in_chroot(state, ['bash', '-lc', f"printf '%s:%s\\n' root {shlex.quote(config.root_password or '<unset>')} | chpasswd"], phase='root-password')
-    run_in_chroot(state, ['bash', '-lc', f"printf '%s:%s\\n' {shlex.quote(config.username)} {shlex.quote(config.user_password or '<unset>')} | chpasswd"], phase='user-password')
+    run_in_chroot(
+        state,
+        ['chpasswd'],
+        phase='root-password',
+        input_text=f"root:{config.root_password or '<unset>'}\n",
+        display_command='chroot /mnt chpasswd <redacted>',
+    )
+    run_in_chroot(
+        state,
+        ['chpasswd'],
+        phase='user-password',
+        input_text=f"{config.username}:{config.user_password or '<unset>'}\n",
+        display_command=f'chroot /mnt chpasswd <redacted:{config.username}>',
+    )
 
 
 def install_bootloader(state: State) -> None:
@@ -538,17 +551,44 @@ def cleanup(state: State) -> None:
         run_command(['bash', '-lc', shell_command], phase='cleanup', state=state)
 
 
-def run_in_chroot(state: State, command: list[str], *, phase: str) -> None:
-    run_command(['chroot', state.config.target_mount, *command], phase=phase, state=state)
+def run_in_chroot(
+    state: State,
+    command: list[str],
+    *,
+    phase: str,
+    input_text: str | None = None,
+    display_command: list[str] | str | None = None,
+) -> None:
+    run_command(
+        ['chroot', state.config.target_mount, *command],
+        phase=phase,
+        state=state,
+        input_text=input_text,
+        display_command=display_command,
+    )
 
 
-def run_command(command: list[str], *, phase: str, state: State, input_text: str | None = None) -> None:
-    line = f'[{phase}] {shlex.join(command)}'
+def run_command(
+    command: list[str],
+    *,
+    phase: str,
+    state: State,
+    input_text: str | None = None,
+    display_command: list[str] | str | None = None,
+) -> None:
+    rendered = render_command(display_command if display_command is not None else command)
+    line = f'[{phase}] {rendered}'
     append_log(state.config, line)
     print(line)
     if not state.config.execute:
         return
     subprocess.run(command, input=input_text, text=True, check=True)
+
+
+def render_command(command: list[str] | str) -> str:
+    if isinstance(command, str):
+        return command
+    return shlex.join(command)
 
 
 def append_log(config: Config, line: str) -> None:
