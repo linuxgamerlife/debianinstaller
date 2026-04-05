@@ -90,13 +90,14 @@ After packages land, the installer drops you into the standard Debian ncurses co
 
 These run inside the chroot so your choices apply to the installed system directly.
 
+After tasksel, the installer automatically detects which display manager was installed (`sddm` for KDE/LXQt, `gdm3` for GNOME, `lightdm` for XFCE/MATE/Cinnamon) and enables it along with `graphical.target`. If you skipped the DE in tasksel the system stays on `multi-user.target`.
+
 ## After Install
 
-Once complete, reboot out of the live environment:
+Once all phases are complete you will be asked:
 
-```bash
-reboot
-```
+- **Install latest kernel from backports?** — installs `linux-image-amd64` from `trixie-backports` and runs `apt upgrade`
+- **Reboot now?** — reboots out of the live environment
 
 You will come back into whichever desktop environment you selected in tasksel, or a TTY login if you skipped it.
 

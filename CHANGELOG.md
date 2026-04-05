@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.0.2 — 2026-04-06
+
+### Added
+
+- Automatic display manager detection after tasksel — enables `sddm`, `gdm3`, or `lightdm` and sets `graphical.target` based on what was installed
+- Post-install prompt to install the latest kernel from `trixie-backports`
+- Post-install reboot prompt
+
+---
+
 ## v0.0.1 — 2026-04-05
 
 Initial release.

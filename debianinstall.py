@@ -379,12 +379,16 @@ def run(state: State) -> None:
             run_phase(phase, state)
             state.completed_phases.append(phase)
             save_state(state)
+        if state.config.execute:
+            prompt_backports_kernel(state)
     finally:
         if state.config.execute and has_active_mounts(Path(state.config.target_mount)):
             try:
                 cleanup(state)
             except subprocess.CalledProcessError as exc:
                 print(f'[cleanup] best-effort cleanup failed: {exc}')
+    if state.config.execute:
+        prompt_reboot()
 
 
 def run_phase(phase: str, state: State) -> None:
@@ -506,6 +510,34 @@ def interactive_config(state: State) -> None:
         print(line)
         if config.execute:
             subprocess.run(chroot_cmd, check=True)
+    setup_graphical_target(state)
+
+
+def setup_graphical_target(state: State) -> None:
+    config = state.config
+    target = config.target_mount
+    dm_candidates = [
+        ('sddm', 'sddm'),       # KDE, LXQt
+        ('gdm3', 'gdm3'),       # GNOME
+        ('lightdm', 'lightdm'), # XFCE, MATE, Cinnamon, LXDE
+    ]
+    dm_service = None
+    if config.execute:
+        for pkg, service in dm_candidates:
+            result = subprocess.run(
+                ['chroot', target, 'dpkg-query', '-W', '-f=${Status}', pkg],
+                capture_output=True, text=True,
+            )
+            if 'install ok installed' in result.stdout:
+                dm_service = service
+                break
+        if dm_service:
+            run_in_chroot(state, ['systemctl', 'enable', dm_service], phase='enable-dm')
+            run_in_chroot(state, ['systemctl', 'set-default', 'graphical.target'], phase='graphical-target')
+        else:
+            print('[setup-graphical] no display manager detected — staying on multi-user.target')
+    else:
+        print('[setup-graphical] (plan) would detect display manager and enable graphical.target if found')
 
 
 def install_packages(state: State) -> None:
@@ -561,6 +593,20 @@ def install_bootloader(state: State) -> None:
     run_in_chroot(state, ['apt', 'install', '-y', 'grub-efi-amd64'], phase='install-grub')
     run_in_chroot(state, ['grub-install', '--target=x86_64-efi', '--efi-directory=/boot/efi', '--bootloader-id=debian', '--removable'], phase='grub-install')
     run_in_chroot(state, ['update-grub'], phase='grub-config')
+
+
+def prompt_backports_kernel(state: State) -> None:
+    answer = input(f'\nInstall latest kernel from {state.config.release}-backports? [y/N]: ').strip().lower()
+    if answer != 'y':
+        return
+    run_in_chroot(state, ['apt', 'install', '-y', '-t', f'{state.config.release}-backports', 'linux-image-amd64'], phase='backports-kernel')
+    run_in_chroot(state, ['apt', 'upgrade', '-y'], phase='backports-upgrade')
+
+
+def prompt_reboot() -> None:
+    answer = input('\nReboot now? [y/N]: ').strip().lower()
+    if answer == 'y':
+        subprocess.run(['reboot'], check=False)
 
 
 def cleanup(state: State) -> None:
