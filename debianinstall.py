@@ -510,7 +510,6 @@ def interactive_config(state: State) -> None:
         print(line)
         if config.execute:
             subprocess.run(chroot_cmd, check=True)
-    setup_graphical_target(state)
 
 
 def setup_graphical_target(state: State) -> None:
@@ -535,7 +534,8 @@ def setup_graphical_target(state: State) -> None:
             run_in_chroot(state, ['systemctl', 'enable', dm_service], phase='enable-dm')
             run_in_chroot(state, ['systemctl', 'set-default', 'graphical.target'], phase='graphical-target')
         else:
-            print('[setup-graphical] no display manager detected — staying on multi-user.target')
+            run_in_chroot(state, ['systemctl', 'set-default', 'multi-user.target'], phase='default-target')
+            print('[setup-graphical] no display manager detected — set multi-user.target')
     else:
         print('[setup-graphical] (plan) would detect display manager and enable graphical.target if found')
 
@@ -553,10 +553,10 @@ def configure_system(state: State) -> None:
     hosts_content = '\n'.join(['127.0.0.1 localhost', f'127.0.1.1 {config.hostname}'])
     run_in_chroot(state, ['bash', '-lc', f"printf '%s\\n' {hostname} > /etc/hostname"], phase='hostname')
     run_in_chroot(state, ['bash', '-lc', f"cat > /etc/hosts <<'EOF'\n{hosts_content}\nEOF"], phase='hosts')
-    run_in_chroot(state, ['systemctl', 'set-default', 'multi-user.target'], phase='default-target')
     if config.package_profile == 'standard-tty':
         run_in_chroot(state, ['systemctl', 'enable', 'NetworkManager'], phase='services')
         run_in_chroot(state, ['systemctl', 'enable', 'ssh'], phase='services')
+    setup_graphical_target(state)
 
 
 def write_fstab(state: State) -> None:

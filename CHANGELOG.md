@@ -8,6 +8,10 @@
 - Post-install prompt to install the latest kernel from `trixie-backports`
 - Post-install reboot prompt
 
+### Fixed
+
+- `graphical.target` was being overwritten back to `multi-user.target` by `configure_system` running after `interactive-config` — `setup_graphical_target` now runs at the end of `configure_system` and always wins
+
 ---
 
 ## v0.0.1 — 2026-04-05
