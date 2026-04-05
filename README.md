@@ -14,9 +14,8 @@ The current goal is simple:
 
 - start from a Debian live environment in a VM
 - run the installer from TTY
-- install a minimal Debian system to disk
-- reboot back into a TTY login
-- install whatever desktop environment you want afterwards
+- get through the base install, then configure locale, timezone, keyboard, and desktop environment interactively using the native Debian tools
+- reboot into your chosen desktop environment
 
 ## Prerequisites
 
@@ -31,53 +30,83 @@ Then:
 ```bash
 git clone https://github.com/linuxgamerlife/debianinstaller
 cd debianinstaller
-chmod +x debianinstaller.py
-sudo ./debianinstaller.py
+chmod +x debianinstall.py
+sudo ./debianinstall.py --interactive
 ```
 
 ## Usage
 
-Run the installer, then select options to change them.
+Run with `--interactive` to get a menu where you can set:
 
-The installer is intended to guide a basic VM install and return you to a usable TTY system once complete.
+- target disk (default `/dev/vda`)
+- hostname
+- username
+- package profile (`minimal-tty` or `standard-tty`)
+- mode (`plan` to dry-run, `apply` to actually install)
+- state file path (for resume support)
+
+Locale, timezone, keyboard layout, and desktop environment are configured interactively mid-install using the standard Debian ncurses tools — you will be prompted for these automatically.
+
+### Modes
+
+**plan** — prints every command that would run without executing anything. Good for checking what will happen first.
+
+**apply** — runs the install. Requires root, a UEFI environment, and a VM (checked automatically).
+
+### Resume
+
+If an install is interrupted, resume from where it left off:
+
+```bash
+sudo ./debianinstall.py --resume --mode apply
+```
+
+## What Gets Installed
+
+The installer writes DEB822 apt sources covering:
+
+- `trixie`, `trixie-updates`, `trixie-backports`
+- `trixie-security`
+- `main contrib non-free non-free-firmware`
+
+i386 architecture is enabled by default (required for Steam and 32-bit software).
+
+### Package Profiles
+
+**minimal-tty** — bare minimum: sudo, locales, keyboard-configuration, console-setup, tasksel
+
+**standard-tty** — adds: ca-certificates, curl, wget, less, vim-tiny, network-manager, openssh-server, tasksel
+
+`linux-image-amd64` and `systemd-sysv` are installed on top of whichever profile you pick.
+
+## Interactive Configuration Mid-Install
+
+After packages land, the installer drops you into the standard Debian ncurses configuration screens in order:
+
+1. **locales** — select your locale
+2. **tzdata** — select your timezone
+3. **keyboard-configuration** — select your keyboard layout
+4. **tasksel** — select a desktop environment (or skip for TTY only)
+
+These run inside the chroot so your choices apply to the installed system directly.
 
 ## After Install
 
-Once complete, reboot.
-
-You should come back to a TTY where you can log in and install whatever desktop environment you want.
-
-## KDE Examples
-
-Minimal KDE:
+Once complete, reboot out of the live environment:
 
 ```bash
-sudo apt update
-sudo apt install kde-plasma-desktop
+reboot
 ```
 
-Full KDE install:
-
-```bash
-sudo apt install task-kde-desktop
-```
-
-Then enable graphical boot:
-
-```bash
-sudo systemctl set-default graphical-target
-sudo systemctl enable --now sddm
-```
-
-Once complete, reboot.
+You will come back into whichever desktop environment you selected in tasksel, or a TTY login if you skipped it.
 
 ## Notes
 
 Right now this is intentionally narrow:
 
-- VM use only
+- VM use only (QEMU/KVM)
+- UEFI + GPT + ext4 only
 - proof of concept
 - focused on the install-from-scratch feel
-- desktop environment setup comes after the base install
 
 If you use it, treat it like an experiment and use disposable VMs.

@@ -20,7 +20,9 @@ PHASES: tuple[str, ...] = (
     'mount',
     'bootstrap',
     'virtual-mounts',
+    'sources',
     'packages',
+    'interactive-config',
     'system-config',
     'fstab',
     'users',
@@ -33,6 +35,7 @@ PACKAGE_PROFILES: dict[str, list[str]] = {
         'locales',
         'keyboard-configuration',
         'console-setup',
+        'tasksel',
     ],
     'standard-tty': [
         'sudo',
@@ -46,6 +49,7 @@ PACKAGE_PROFILES: dict[str, list[str]] = {
         'vim-tiny',
         'network-manager',
         'openssh-server',
+        'tasksel',
     ],
 }
 
@@ -56,7 +60,6 @@ VM_HINT_PATHS = (
 VM_HINT_TOKENS = ('kvm', 'qemu', 'virtualbox', 'vmware', 'bochs', 'hyper-v')
 HOSTNAME_PATTERN = re.compile(r'^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$')
 USERNAME_PATTERN = re.compile(r'^[a-z_][a-z0-9_-]*[$]?$')
-KEYBOARD_PATTERN = re.compile(r'^[A-Za-z0-9_-]+$')
 SUFFIXLESS_PREFIXES = ('/dev/nvme', '/dev/mmcblk')
 REQUIRED_COMMANDS = (
     'fdisk',
@@ -85,9 +88,6 @@ class Config:
     username: str = 'debian'
     root_password: str | None = None
     user_password: str | None = None
-    locale: str = 'en_GB.UTF-8'
-    timezone: str = 'Europe/London'
-    keyboard_layout: str = 'gb'
     package_profile: str = 'standard-tty'
     release: str = 'trixie'
     mirror: str = 'https://deb.debian.org/debian'
@@ -179,9 +179,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--username', help='primary user account name')
     parser.add_argument('--root-password', help='root password for apply mode')
     parser.add_argument('--user-password', help='primary user password for apply mode')
-    parser.add_argument('--locale', help='default locale, for example en_GB.UTF-8')
-    parser.add_argument('--timezone', help='timezone, for example Europe/London')
-    parser.add_argument('--keyboard-layout', help='console keyboard layout, for example gb or us')
     parser.add_argument('--package-profile', choices=sorted(PACKAGE_PROFILES), help='base package profile')
     parser.add_argument('--mode', choices=['plan', 'apply'], default='plan')
     parser.add_argument('--confirm-disk', help='required in apply mode and must exactly match --disk')
@@ -199,9 +196,6 @@ def config_from_args(args: argparse.Namespace) -> Config:
         username=args.username or 'debian',
         root_password=args.root_password,
         user_password=args.user_password,
-        locale=args.locale or 'en_GB.UTF-8',
-        timezone=args.timezone or 'Europe/London',
-        keyboard_layout=args.keyboard_layout or 'gb',
         package_profile=args.package_profile or 'standard-tty',
         mode=args.mode,
         confirm_disk=args.confirm_disk,
@@ -213,7 +207,7 @@ def config_from_args(args: argparse.Namespace) -> Config:
 def run_interactive_setup(config: Config) -> Config:
     while True:
         print(render_menu(config))
-        choice = input('Select item to edit [1-9], or press Enter to continue: ').strip()
+        choice = input('Select item to edit [1-6], or press Enter to continue: ').strip()
         if not choice:
             if config.execute:
                 confirmation = input(f'Type the target disk to confirm destructive apply [{config.disk}]: ').strip()
@@ -226,16 +220,10 @@ def run_interactive_setup(config: Config) -> Config:
         elif choice == '3':
             config.username = prompt_text('Username', config.username)
         elif choice == '4':
-            config.locale = prompt_text('Locale', config.locale)
-        elif choice == '5':
-            config.timezone = prompt_text('Timezone', config.timezone)
-        elif choice == '6':
-            config.keyboard_layout = prompt_text('Keyboard layout', config.keyboard_layout)
-        elif choice == '7':
             config.package_profile = prompt_profile(config.package_profile)
-        elif choice == '8':
+        elif choice == '5':
             config.mode = prompt_mode(config.mode)
-        elif choice == '9':
+        elif choice == '6':
             config.state_file = prompt_text('State file', config.state_file)
         else:
             print('Invalid choice.')
@@ -249,14 +237,13 @@ def render_menu(config: Config) -> str:
             f'1. disk: {config.disk}',
             f'2. hostname: {config.hostname}',
             f'3. username: {config.username}',
-            f'4. locale: {config.locale}',
-            f'5. timezone: {config.timezone}',
-            f'6. keyboard layout: {config.keyboard_layout}',
-            f'7. package profile: {config.package_profile}',
-            f'8. mode: {config.mode}',
-            f'9. state file: {config.state_file}',
+            f'4. package profile: {config.package_profile}',
+            f'5. mode: {config.mode}',
+            f'6. state file: {config.state_file}',
             '',
             'Whole-disk GPT install: EFI + ext4 root.',
+            'Locale, timezone, keyboard and desktop environment will be configured',
+            'interactively after packages are installed.',
             'Press Enter to continue.',
         ]
     )
@@ -323,8 +310,6 @@ def validate_config(config: Config) -> None:
         raise InstallerError(f"invalid hostname '{config.hostname}'")
     if not USERNAME_PATTERN.fullmatch(config.username):
         raise InstallerError(f"invalid username '{config.username}'")
-    if not KEYBOARD_PATTERN.fullmatch(config.keyboard_layout):
-        raise InstallerError(f"invalid keyboard layout '{config.keyboard_layout}'")
     if config.package_profile not in PACKAGE_PROFILES:
         raise InstallerError(f"unknown package profile '{config.package_profile}'")
     if config.execute:
@@ -376,9 +361,6 @@ def render_summary(state: State) -> str:
             f'  root partition: {config.root_partition}',
             f'  hostname: {config.hostname}',
             f'  username: {config.username}',
-            f'  locale: {config.locale}',
-            f'  timezone: {config.timezone}',
-            f'  keyboard layout: {config.keyboard_layout}',
             f'  package profile: {config.package_profile}',
             f'  state file: {config.state_file}',
             f'  completed phases: {", ".join(state.completed_phases) if state.completed_phases else "none"}',
@@ -416,8 +398,12 @@ def run_phase(phase: str, state: State) -> None:
         bootstrap(state)
     elif phase == 'virtual-mounts':
         mount_virtual(state)
+    elif phase == 'sources':
+        write_sources(state)
     elif phase == 'packages':
         install_packages(state)
+    elif phase == 'interactive-config':
+        interactive_config(state)
     elif phase == 'system-config':
         configure_system(state)
     elif phase == 'fstab':
@@ -469,6 +455,59 @@ def install_live_prerequisites(state: State) -> None:
     run_command(['apt-get', 'install', '-y', *LIVE_PREREQUISITE_PACKAGES], phase='host-install-prereqs', state=state)
 
 
+def write_sources(state: State) -> None:
+    config = state.config
+    target = config.target_mount
+    release = config.release
+    main_sources = '\n'.join([
+        'Types: deb',
+        f'URIs: {config.mirror}',
+        f'Suites: {release} {release}-updates {release}-backports',
+        'Components: main contrib non-free non-free-firmware',
+        'Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg',
+    ])
+    security_sources = '\n'.join([
+        'Types: deb',
+        'URIs: https://security.debian.org/debian-security',
+        f'Suites: {release}-security',
+        'Components: main contrib non-free non-free-firmware',
+        'Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg',
+    ])
+    run_command(
+        ['bash', '-c', f"cat > {target}/etc/apt/sources.list.d/debian.sources <<'EOF'\n{main_sources}\nEOF"],
+        phase='sources-main', state=state,
+    )
+    run_command(
+        ['bash', '-c', f"cat > {target}/etc/apt/sources.list.d/debian-security.sources <<'EOF'\n{security_sources}\nEOF"],
+        phase='sources-security', state=state,
+    )
+    # Remove the legacy sources.list left by debootstrap
+    run_command(['rm', '-f', f'{target}/etc/apt/sources.list'], phase='sources-cleanup', state=state)
+    # Enable i386 for Steam and other 32-bit software
+    run_in_chroot(state, ['dpkg', '--add-architecture', 'i386'], phase='add-i386')
+    run_in_chroot(state, ['apt', 'update'], phase='sources-apt-update')
+
+
+def interactive_config(state: State) -> None:
+    """Run interactive debconf dialogs inside the chroot for locale, timezone, keyboard, and DE selection."""
+    config = state.config
+    target = config.target_mount
+    # These must run without DEBIAN_FRONTEND=noninteractive so the ncurses UI appears
+    for cmd, phase in [
+        (['dpkg-reconfigure', 'locales'], 'interactive-locales'),
+        (['dpkg-reconfigure', 'tzdata'], 'interactive-tzdata'),
+        (['dpkg-reconfigure', 'keyboard-configuration'], 'interactive-keyboard'),
+        (['tasksel'], 'interactive-tasksel'),
+    ]:
+        chroot_cmd = ['chroot', target, *cmd]
+        rendered = render_command(chroot_cmd)
+        line = f'[{phase}] {rendered}'
+        append_log(config, line)
+        print(line)
+        if config.execute:
+            subprocess.run(chroot_cmd, check=True)
+
+
 def install_packages(state: State) -> None:
     config = state.config
     run_in_chroot(state, ['apt', 'update'], phase='apt-update')
@@ -479,22 +518,9 @@ def install_packages(state: State) -> None:
 def configure_system(state: State) -> None:
     config = state.config
     hostname = shlex.quote(config.hostname)
-    locale = shlex.quote(config.locale)
     hosts_content = '\n'.join(['127.0.0.1 localhost', f'127.0.1.1 {config.hostname}'])
-    keyboard_content = '\n'.join([
-        'XKBMODEL="pc105"',
-        f'XKBLAYOUT={config.keyboard_layout}',
-        'XKBVARIANT=""',
-        'XKBOPTIONS=""',
-        'BACKSPACE="guess"',
-    ])
     run_in_chroot(state, ['bash', '-lc', f"printf '%s\\n' {hostname} > /etc/hostname"], phase='hostname')
     run_in_chroot(state, ['bash', '-lc', f"cat > /etc/hosts <<'EOF'\n{hosts_content}\nEOF"], phase='hosts')
-    run_in_chroot(state, ['bash', '-lc', f"printf '%s UTF-8\\n' {locale} > /etc/locale.gen && locale-gen && update-locale LANG={locale}"], phase='locale')
-    run_in_chroot(state, ['ln', '-sf', f'/usr/share/zoneinfo/{config.timezone}', '/etc/localtime'], phase='timezone')
-    run_in_chroot(state, ['dpkg-reconfigure', '-f', 'noninteractive', 'tzdata'], phase='timezone')
-    run_in_chroot(state, ['bash', '-lc', f"cat > /etc/default/keyboard <<'EOF'\n{keyboard_content}\nEOF"], phase='keyboard')
-    run_in_chroot(state, ['dpkg-reconfigure', '-f', 'noninteractive', 'keyboard-configuration'], phase='keyboard')
     run_in_chroot(state, ['systemctl', 'set-default', 'multi-user.target'], phase='default-target')
     if config.package_profile == 'standard-tty':
         run_in_chroot(state, ['systemctl', 'enable', 'NetworkManager'], phase='services')

@@ -1,0 +1,21 @@
+# Changelog
+
+## v0.0.1 — 2026-04-05
+
+Initial release.
+
+### Added
+
+- Single-file debootstrap-based Debian installer (`debianinstall.py`)
+- Interactive pre-install menu: disk, hostname, username, package profile, mode, state file
+- Two package profiles: `minimal-tty` and `standard-tty`
+- Phase-based install pipeline with state file and resume support
+- UEFI + GPT partitioning (EFI partition + ext4 root)
+- DEB822 apt sources: `trixie`, `trixie-updates`, `trixie-backports`, `trixie-security`, with `main contrib non-free non-free-firmware`
+- i386 architecture enabled by default (for Steam and 32-bit software)
+- Interactive mid-install configuration via Debian ncurses tools: `dpkg-reconfigure locales`, `dpkg-reconfigure tzdata`, `dpkg-reconfigure keyboard-configuration`, `tasksel`
+- `tasksel` included in all package profiles for desktop environment selection mid-install
+- GRUB EFI bootloader install
+- Plan mode (dry-run) and apply mode
+- VM-only safety check (blocks apply mode on non-VM hosts)
+- Optional command log via `--log-file`
