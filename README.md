@@ -8,7 +8,7 @@ This is a proof of concept. One thing I like about Arch is the build-from-nothin
 
 ## Current Scope
 
-This is built for VMs only right now so you do not accidentally screw up your actual install.
+This is NO LONGER just built for VMs only, so you CAN accidentally screw up your actual install if you are not careful!
 
 The current goal is simple:
 
