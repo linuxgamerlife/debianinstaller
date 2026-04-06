@@ -12,7 +12,7 @@ This is NO LONGER just built for VMs only, so you CAN accidentally screw up your
 
 The current goal is simple:
 
-- start from a Debian live environment in a VM
+- start from a Debian live environment (Recommended in a VM)
 - run the installer from TTY
 - get through the base install, then configure locale, timezone, keyboard, and desktop environment interactively using the native Debian tools
 - reboot into your chosen desktop environment
