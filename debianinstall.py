@@ -14,7 +14,7 @@ from pathlib import Path
 from shutil import which
 from typing import Any
 
-VERSION = 'v0.0.3'
+VERSION = 'v0.0.4'
 BANNER_URL = 'https://github.com/linuxgamerlife/debianinstaller'
 
 PHASES: tuple[str, ...] = (
@@ -155,6 +155,16 @@ def main(argv: list[str] | None = None) -> int:
         if config.execute and 'users' not in completed:
             config = ensure_passwords(config)
 
+        if config.execute:
+            if not looks_like_vm() and not config.skip_vm_check:
+                if not confirm_non_vm_install():
+                    print('\nAborted.')
+                    return 0
+                config.skip_vm_check = True
+            if not confirm_apply(config):
+                print('\nAborted.')
+                return 0
+
         validate_config(config)
         state = State(config=config, completed_phases=completed)
         print(render_summary(state))
@@ -234,9 +244,6 @@ def render_banner() -> str:
 
 
 def run_interactive_setup(config: Config) -> Config:
-    print(render_banner())
-    print()
-
     print('Step 1: Select disk')
     config.disk = prompt_text('Disk', config.disk)
 
@@ -258,18 +265,12 @@ def run_interactive_setup(config: Config) -> Config:
     while True:
         os.system('clear')
         print(render_banner())
-        print('\nSummary\n')
+        print('\nThank you. I have all the info I need to get started.')
+        print('Check the summary below and confirm you want to continue.\n')
         print(render_summary_menu(config))
         choice = input('\nSelect number to change, or y to continue: ').strip().lower()
 
         if choice == 'y':
-            if config.execute:
-                if not looks_like_vm() and not config.skip_vm_check:
-                    if not confirm_non_vm_install():
-                        continue
-                    config.skip_vm_check = True
-                if not confirm_apply(config):
-                    continue
             return config
 
         if choice.isdigit():
@@ -376,7 +377,7 @@ def ensure_passwords(config: Config) -> Config:
 
 
 def prompt_password(label: str) -> str:
-    first = getpass.getpass(f'Enter password for {label}: ')
+    first = getpass.getpass(f'Create password for {label}: ')
     second = getpass.getpass(f'Confirm password for {label}: ')
     if not first:
         raise InstallerError(f'password for {label} cannot be empty')
