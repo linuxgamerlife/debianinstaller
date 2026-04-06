@@ -14,7 +14,7 @@ from pathlib import Path
 from shutil import which
 from typing import Any
 
-VERSION = 'v0.0.5'
+VERSION = 'v0.0.6'
 BANNER_URL = 'https://github.com/linuxgamerlife/debianinstaller'
 
 PHASES: tuple[str, ...] = (
@@ -577,7 +577,6 @@ def interactive_config(state: State) -> None:
     target = config.target_mount
     # These must run without DEBIAN_FRONTEND=noninteractive so the ncurses UI appears
     for cmd, phase in [
-        (['dpkg-reconfigure', 'locales'], 'interactive-locales'),
         (['dpkg-reconfigure', 'tzdata'], 'interactive-tzdata'),
         (['dpkg-reconfigure', 'keyboard-configuration'], 'interactive-keyboard'),
         (['tasksel'], 'interactive-tasksel'),
@@ -632,6 +631,7 @@ def configure_system(state: State) -> None:
     hosts_content = '\n'.join(['127.0.0.1 localhost', f'127.0.1.1 {config.hostname}'])
     run_in_chroot(state, ['bash', '-lc', f"printf '%s\\n' {hostname} > /etc/hostname"], phase='hostname')
     run_in_chroot(state, ['bash', '-lc', f"cat > /etc/hosts <<'EOF'\n{hosts_content}\nEOF"], phase='hosts')
+    run_in_chroot(state, ['bash', '-lc', "printf 'en_US.UTF-8 UTF-8\\n' > /etc/locale.gen && locale-gen && update-locale LANG=en_US.UTF-8"], phase='locale')
     if config.package_profile == 'standard-tty':
         run_in_chroot(state, ['systemctl', 'enable', 'NetworkManager'], phase='services')
         run_in_chroot(state, ['systemctl', 'enable', 'ssh'], phase='services')

@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.0.6 — 2026-04-06
+
+### Changed
+
+- Removed `dpkg-reconfigure locales` from interactive install step — locale setup was silently failing inside the chroot, leaving all locale variables unset
+- `en_US.UTF-8` is now set silently during `configure_system` — reliable, no user interaction needed
+- Users can still change locale post-install with `sudo dpkg-reconfigure locales`
+
+---
+
 ## v0.0.5 — 2026-04-06
 
 ### Added

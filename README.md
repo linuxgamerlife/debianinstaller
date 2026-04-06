@@ -1,4 +1,4 @@
-# LGL Debian Installer v0.0.5
+# LGL Debian Installer v0.0.6
 
 This exists because I was curious whether you can get something close to the same experience as Arch, but on Debian.
 
@@ -40,7 +40,7 @@ Every run starts with:
 
 ```
 -----------------------------------------------------
-|            LGL Debian Installer v0.0.5            |
+|            LGL Debian Installer v0.0.6            |
 |                  100% Vibe Coded                  |
 |               Intelligently Prompted              |
 | https://github.com/linuxgamerlife/debianinstaller |
