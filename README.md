@@ -1,4 +1,4 @@
-# Debian Installer
+# LGL Debian Installer v0.0.3
 
 This exists because I was curious whether you can get something close to the same experience as Arch, but on Debian.
 
@@ -34,18 +34,54 @@ chmod +x debianinstall.py
 sudo ./debianinstall.py --interactive
 ```
 
+## Banner
+
+Every run starts with:
+
+```
+-----------------------------------------------------
+|            LGL Debian Installer v0.0.3            |
+|                  100% Vibe Coded                  |
+|               Intelligently Prompted              |
+| https://github.com/linuxgamerlife/debianinstaller |
+-----------------------------------------------------
+```
+
 ## Usage
 
-Run with `--interactive` to get a menu where you can set:
+Run with `--interactive` to launch the step-by-step wizard:
 
-- target disk (default `/dev/vda`)
-- hostname
-- username
-- package profile (`minimal-tty` or `standard-tty`)
-- mode (`plan` to dry-run, `apply` to actually install)
-- state file path (for resume support)
+```
+Step 1: Select disk
+Step 2: Hostname
+Step 3: Username
+Step 4: Package profile
+Step 5: Mode
+Step 6: State file
+```
+
+After completing the steps, the screen clears and shows a summary:
+
+```
+Summary
+
+1. disk:            /dev/vda
+2. hostname:        debian-vm
+3. username:        debian
+4. package profile: standard-tty
+5. mode:            plan
+6. state file:      /var/tmp/debianinstall-v1-state.json
+
+Select number to change, or y to continue:
+```
+
+Select a number to change that item, or `y` to proceed. In apply mode you will be asked to confirm the target drive before anything destructive runs.
 
 Locale, timezone, keyboard layout, and desktop environment are configured interactively mid-install using the standard Debian ncurses tools — you will be prompted for these automatically.
+
+### Non-VM installs
+
+If no VM is detected in apply mode, the installer shows a warning and runs `lsblk` so you can see your drives before deciding. You will be asked to confirm twice. Use with care — this is still intended for disposable environments.
 
 ### Modes
 

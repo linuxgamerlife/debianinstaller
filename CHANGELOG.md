@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.0.3 — 2026-04-06
+
+### Added
+
+- ASCII banner shown on every run and on the summary screen:
+  `LGL Debian Installer v0.0.3 / 100% Vibe Coded / Intelligently Prompted / GitHub URL`
+- Step-by-step wizard replaces the old menu — each option presented one at a time with `Step N:` heading
+- Summary screen after wizard — clear, banner, numbered list, edit by number or `y` to continue
+- Apply confirmation box — shows target drive name, requires typing it exactly to proceed
+- Non-VM bypass — if apply mode and no VM detected, shows a warning box, runs `lsblk` so drives are visible, then asks for a second confirmation before allowing install on real hardware
+
+---
+
 ## v0.0.2 — 2026-04-06
 
 ### Added

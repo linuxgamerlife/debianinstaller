@@ -14,6 +14,9 @@ from pathlib import Path
 from shutil import which
 from typing import Any
 
+VERSION = 'v0.0.3'
+BANNER_URL = 'https://github.com/linuxgamerlife/debianinstaller'
+
 PHASES: tuple[str, ...] = (
     'partition',
     'format',
@@ -98,6 +101,7 @@ class Config:
     confirm_disk: str | None = None
     state_file: str = '/var/tmp/debianinstall-v1-state.json'
     log_file: str | None = None
+    skip_vm_check: bool = False
 
     @property
     def execute(self) -> bool:
@@ -129,6 +133,9 @@ class State:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    print(render_banner())
+    print()
 
     try:
         if args.resume:
@@ -204,49 +211,126 @@ def config_from_args(args: argparse.Namespace) -> Config:
     )
 
 
+def make_box(lines: list[str], *, align: str = 'center') -> str:
+    width = max(len(l) for l in lines)
+    border = '-' * (width + 4)
+    result = [border]
+    for line in lines:
+        if align == 'center':
+            result.append(f'| {line.center(width)} |')
+        else:
+            result.append(f'| {line:<{width}} |')
+    result.append(border)
+    return '\n'.join(result)
+
+
+def render_banner() -> str:
+    return make_box([
+        f'LGL Debian Installer {VERSION}',
+        '100% Vibe Coded',
+        'Intelligently Prompted',
+        BANNER_URL,
+    ])
+
+
 def run_interactive_setup(config: Config) -> Config:
+    print(render_banner())
+    print()
+
+    print('Step 1: Select disk')
+    config.disk = prompt_text('Disk', config.disk)
+
+    print('\nStep 2: Hostname')
+    config.hostname = prompt_text('Hostname', config.hostname)
+
+    print('\nStep 3: Username')
+    config.username = prompt_text('Username', config.username)
+
+    print('\nStep 4: Package profile')
+    config.package_profile = prompt_profile(config.package_profile)
+
+    print('\nStep 5: Mode')
+    config.mode = prompt_mode(config.mode)
+
+    print('\nStep 6: State file')
+    config.state_file = prompt_text('State file', config.state_file)
+
     while True:
-        print(render_menu(config))
-        choice = input('Select item to edit [1-6], or press Enter to continue: ').strip()
-        if not choice:
+        os.system('clear')
+        print(render_banner())
+        print('\nSummary\n')
+        print(render_summary_menu(config))
+        choice = input('\nSelect number to change, or y to continue: ').strip().lower()
+
+        if choice == 'y':
             if config.execute:
-                confirmation = input(f'Type the target disk to confirm destructive apply [{config.disk}]: ').strip()
-                config.confirm_disk = confirmation or config.confirm_disk
+                if not looks_like_vm() and not config.skip_vm_check:
+                    if not confirm_non_vm_install():
+                        continue
+                    config.skip_vm_check = True
+                if not confirm_apply(config):
+                    continue
             return config
-        if choice == '1':
-            config.disk = prompt_text('Target disk', config.disk)
-        elif choice == '2':
-            config.hostname = prompt_text('Hostname', config.hostname)
-        elif choice == '3':
-            config.username = prompt_text('Username', config.username)
-        elif choice == '4':
-            config.package_profile = prompt_profile(config.package_profile)
-        elif choice == '5':
-            config.mode = prompt_mode(config.mode)
-        elif choice == '6':
-            config.state_file = prompt_text('State file', config.state_file)
+
+        if choice.isdigit():
+            n = int(choice)
+            if n == 1:
+                config.disk = prompt_text('Disk', config.disk)
+            elif n == 2:
+                config.hostname = prompt_text('Hostname', config.hostname)
+            elif n == 3:
+                config.username = prompt_text('Username', config.username)
+            elif n == 4:
+                config.package_profile = prompt_profile(config.package_profile)
+            elif n == 5:
+                config.mode = prompt_mode(config.mode)
+            elif n == 6:
+                config.state_file = prompt_text('State file', config.state_file)
         else:
             print('Invalid choice.')
 
 
-def render_menu(config: Config) -> str:
-    return '\n'.join(
-        [
-            '',
-            'Debian Installer v1',
-            f'1. disk: {config.disk}',
-            f'2. hostname: {config.hostname}',
-            f'3. username: {config.username}',
-            f'4. package profile: {config.package_profile}',
-            f'5. mode: {config.mode}',
-            f'6. state file: {config.state_file}',
-            '',
-            'Whole-disk GPT install: EFI + ext4 root.',
-            'Locale, timezone, keyboard and desktop environment will be configured',
-            'interactively after packages are installed.',
-            'Press Enter to continue.',
-        ]
-    )
+def render_summary_menu(config: Config) -> str:
+    return '\n'.join([
+        f'1. disk:            {config.disk}',
+        f'2. hostname:        {config.hostname}',
+        f'3. username:        {config.username}',
+        f'4. package profile: {config.package_profile}',
+        f'5. mode:            {config.mode}',
+        f'6. state file:      {config.state_file}',
+    ])
+
+
+def confirm_non_vm_install() -> bool:
+    print()
+    print(make_box([
+        'WARNING: No VM detected. Are you sure you want to continue?',
+        'Continuing without knowing what you are doing might be bad!',
+    ], align='left'))
+    answer = input('\nContinue anyway? [y/N]: ').strip().lower()
+    if answer != 'y':
+        return False
+    print()
+    subprocess.run(['lsblk'], check=False)
+    print()
+    answer = input('Still sure? [y/N]: ').strip().lower()
+    return answer == 'y'
+
+
+def confirm_apply(config: Config) -> bool:
+    disk_name = Path(config.disk).name
+    print()
+    print(make_box([
+        'Are you sure you want to continue?',
+        'This will delete ALL data on:',
+        f'Drive: {disk_name}',
+    ], align='left'))
+    answer = input(f'\nType the disk name to confirm [{disk_name}]: ').strip()
+    if answer == disk_name:
+        config.confirm_disk = config.disk
+        return True
+    print('Disk name did not match — returning to summary.')
+    return False
 
 
 def prompt_text(label: str, current: str) -> str:
@@ -317,7 +401,7 @@ def validate_config(config: Config) -> None:
             raise InstallerError('apply mode requires root')
         if not Path('/sys/firmware/efi').exists():
             raise InstallerError('apply mode requires a UEFI booted environment')
-        if not looks_like_vm():
+        if not looks_like_vm() and not config.skip_vm_check:
             raise InstallerError('apply mode is blocked because this host does not look like a VM')
         if config.confirm_disk != config.disk:
             raise InstallerError('apply mode requires --confirm-disk to exactly match --disk')
