@@ -14,7 +14,7 @@ from pathlib import Path
 from shutil import which
 from typing import Any
 
-VERSION = 'v0.0.4'
+VERSION = 'v0.0.5'
 BANNER_URL = 'https://github.com/linuxgamerlife/debianinstaller'
 
 PHASES: tuple[str, ...] = (
@@ -97,9 +97,9 @@ class Config:
     efi_size: str = '512M'
     target_mount: str = '/mnt'
     boot_mode: str = 'uefi'
-    mode: str = 'plan'
+    mode: str = 'apply'
     confirm_disk: str | None = None
-    state_file: str = '/var/tmp/debianinstall-v1-state.json'
+    state_file: str = '/var/tmp/debianinstall-state.json'
     log_file: str | None = None
     skip_vm_check: bool = False
 
@@ -134,13 +134,13 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    os.system('clear')
     print(render_banner())
     print()
 
     try:
         if args.resume:
             config, completed = load_state(Path(args.state_file))
-            config.mode = args.mode or config.mode
             if args.confirm_disk:
                 config.confirm_disk = args.confirm_disk
             if args.log_file:
@@ -182,10 +182,7 @@ def main(argv: list[str] | None = None) -> int:
         for warning in warnings:
             print(f'- {warning}')
 
-    if config.execute:
-        print('\nApply mode completed.')
-    else:
-        print('\nPlan mode only. No install commands were executed.')
+    print('\nInstall completed.')
     return 0
 
 
@@ -197,9 +194,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--root-password', help='root password for apply mode')
     parser.add_argument('--user-password', help='primary user password for apply mode')
     parser.add_argument('--package-profile', choices=sorted(PACKAGE_PROFILES), help='base package profile')
-    parser.add_argument('--mode', choices=['plan', 'apply'], default='plan')
-    parser.add_argument('--confirm-disk', help='required in apply mode and must exactly match --disk')
-    parser.add_argument('--state-file', default='/var/tmp/debianinstall-v1-state.json')
+    parser.add_argument('--confirm-disk', help='must exactly match --disk to confirm destructive install')
+    parser.add_argument('--state-file', default='/var/tmp/debianinstall-state.json')
     parser.add_argument('--log-file', help='optional command log')
     parser.add_argument('--interactive', action='store_true', help='launch interactive setup')
     parser.add_argument('--resume', action='store_true', help='resume from saved state file')
@@ -214,7 +210,6 @@ def config_from_args(args: argparse.Namespace) -> Config:
         root_password=args.root_password,
         user_password=args.user_password,
         package_profile=args.package_profile or 'standard-tty',
-        mode=args.mode,
         confirm_disk=args.confirm_disk,
         state_file=args.state_file,
         log_file=args.log_file,
@@ -245,21 +240,23 @@ def render_banner() -> str:
 
 def run_interactive_setup(config: Config) -> Config:
     print('Step 1: Select disk')
-    config.disk = prompt_text('Disk', config.disk)
+    print('Available disks:\n')
+    subprocess.run(['lsblk', '-o', 'NAME,SIZE,TYPE,MOUNTPOINT'], check=False)
+    config.disk = prompt_disk(config.disk)
 
-    print('\nStep 2: Hostname')
+    print('\nStep 2: What would you like your hostname to be?')
     config.hostname = prompt_text('Hostname', config.hostname)
 
-    print('\nStep 3: Username')
+    print('\nStep 3: What username would you like to use?')
     config.username = prompt_text('Username', config.username)
 
-    print('\nStep 4: Package profile')
+    print('\nStep 4: Which package profile do you want?')
+    print('  minimal-tty  — bare minimum to boot and log in')
+    print('  standard-tty — adds networking, SSH, curl, wget, vim')
     config.package_profile = prompt_profile(config.package_profile)
 
-    print('\nStep 5: Mode')
-    config.mode = prompt_mode(config.mode)
-
-    print('\nStep 6: State file')
+    print('\nStep 5: State file')
+    print('  The state file records completed phases so the install can resume if interrupted.')
     config.state_file = prompt_text('State file', config.state_file)
 
     while True:
@@ -276,7 +273,9 @@ def run_interactive_setup(config: Config) -> Config:
         if choice.isdigit():
             n = int(choice)
             if n == 1:
-                config.disk = prompt_text('Disk', config.disk)
+                print('\nAvailable disks:\n')
+                subprocess.run(['lsblk', '-o', 'NAME,SIZE,TYPE,MOUNTPOINT'], check=False)
+                config.disk = prompt_disk(config.disk)
             elif n == 2:
                 config.hostname = prompt_text('Hostname', config.hostname)
             elif n == 3:
@@ -284,11 +283,18 @@ def run_interactive_setup(config: Config) -> Config:
             elif n == 4:
                 config.package_profile = prompt_profile(config.package_profile)
             elif n == 5:
-                config.mode = prompt_mode(config.mode)
-            elif n == 6:
                 config.state_file = prompt_text('State file', config.state_file)
         else:
             print('Invalid choice.')
+
+
+def prompt_disk(current: str) -> str:
+    while True:
+        value = input(f'\nDisk [{current}]: ').strip() or current
+        confirm = input(f'Use {value}? This will erase all data on it. [y/N]: ').strip().lower()
+        if confirm == 'y':
+            return value
+        print('OK, let\'s pick again.')
 
 
 def render_summary_menu(config: Config) -> str:
@@ -297,8 +303,7 @@ def render_summary_menu(config: Config) -> str:
         f'2. hostname:        {config.hostname}',
         f'3. username:        {config.username}',
         f'4. package profile: {config.package_profile}',
-        f'5. mode:            {config.mode}',
-        f'6. state file:      {config.state_file}',
+        f'5. state file:      {config.state_file}',
     ])
 
 
@@ -338,17 +343,6 @@ def prompt_text(label: str, current: str) -> str:
     value = input(f'{label} [{current}]: ').strip()
     return value or current
 
-
-def prompt_mode(current: str) -> str:
-    print('1. plan')
-    print('2. apply')
-    choice = input(f'Mode [current: {current}]: ').strip()
-    if choice == '2':
-        return 'apply'
-    if choice in ('', '1'):
-        return 'plan'
-    print('Invalid mode; keeping current value.')
-    return current
 
 
 def prompt_profile(current: str) -> str:
@@ -440,7 +434,6 @@ def render_summary(state: State) -> str:
     return '\n'.join(
         [
             'debianinstall v1',
-            f'  mode: {config.mode}',
             f'  disk: {config.disk}',
             f'  efi partition: {config.efi_partition}',
             f'  root partition: {config.root_partition}',

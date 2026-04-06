@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.0.5 — 2026-04-06
+
+### Added
+
+- `lsblk` output shown before disk selection in the wizard (both VM and real hardware)
+- Immediate disk confirmation after entering disk name — "Use /dev/vda? This will erase all data."
+- Screen cleared on first run before banner
+
+### Changed
+
+- Removed plan/apply mode — installer always runs (apply)
+- Descriptive wizard prompts: "What would you like your hostname to be?", "What username would you like to use?", "Which package profile do you want?"
+- State file step now explains its purpose: records completed phases so install can resume if interrupted
+- State file default renamed from `debianinstall-v1-state.json` to `debianinstall-state.json`
+- Summary menu reduced to 5 items (mode removed)
+
+---
+
 ## v0.0.4 — 2026-04-06
 
 ### Fixed

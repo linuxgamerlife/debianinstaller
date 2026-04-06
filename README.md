@@ -1,4 +1,4 @@
-# LGL Debian Installer v0.0.4
+# LGL Debian Installer v0.0.5
 
 This exists because I was curious whether you can get something close to the same experience as Arch, but on Debian.
 
@@ -40,7 +40,7 @@ Every run starts with:
 
 ```
 -----------------------------------------------------
-|            LGL Debian Installer v0.0.4            |
+|            LGL Debian Installer v0.0.5            |
 |                  100% Vibe Coded                  |
 |               Intelligently Prompted              |
 | https://github.com/linuxgamerlife/debianinstaller |
@@ -53,41 +53,35 @@ Run with `--interactive` to launch the step-by-step wizard:
 
 ```
 Step 1: Select disk
-Step 2: Hostname
-Step 3: Username
-Step 4: Package profile
-Step 5: Mode
-Step 6: State file
+  (lsblk shown here)
+  Disk [/dev/vda]:
+  Use /dev/vda? This will erase all data on it. [y/N]:
+
+Step 2: What would you like your hostname to be?
+Step 3: What username would you like to use?
+Step 4: Which package profile do you want?
+Step 5: State file (saves progress for resume if interrupted)
 ```
 
 After completing the steps, the screen clears and shows a summary:
 
 ```
-Summary
-
 1. disk:            /dev/vda
 2. hostname:        debian-vm
 3. username:        debian
 4. package profile: standard-tty
-5. mode:            plan
-6. state file:      /var/tmp/debianinstall-v1-state.json
+5. state file:      /var/tmp/debianinstall-state.json
 
 Select number to change, or y to continue:
 ```
 
-Select a number to change that item, or `y` to proceed. In apply mode you will be asked to confirm the target drive before anything destructive runs.
+Select a number to change that item, or `y` to proceed. After confirming, you will be prompted to create passwords, then shown a final drive wipe warning before anything destructive runs.
 
 Locale, timezone, keyboard layout, and desktop environment are configured interactively mid-install using the standard Debian ncurses tools — you will be prompted for these automatically.
 
 ### Non-VM installs
 
-If no VM is detected in apply mode, the installer shows a warning and runs `lsblk` so you can see your drives before deciding. You will be asked to confirm twice. Use with care — this is still intended for disposable environments.
-
-### Modes
-
-**plan** — prints every command that would run without executing anything. Good for checking what will happen first.
-
-**apply** — runs the install. Requires root, a UEFI environment, and a VM (checked automatically).
+If no VM is detected, the installer shows a warning and runs `lsblk` so you can see your drives before deciding. You will be asked to confirm twice. Use with care.
 
 ### Resume
 
@@ -127,6 +121,16 @@ After packages land, the installer drops you into the standard Debian ncurses co
 These run inside the chroot so your choices apply to the installed system directly.
 
 After tasksel, the installer automatically detects which display manager was installed (`sddm` for KDE/LXQt, `gdm3` for GNOME, `lightdm` for XFCE/MATE/Cinnamon) and enables it along with `graphical.target`. If you skipped the DE in tasksel the system stays on `multi-user.target`.
+
+## If You End Up at a TTY After Reboot
+
+It is easy to miss selecting a desktop environment in tasksel — you need to press **Space** to select it, not Enter. If you reboot into a TTY, run:
+
+```bash
+sudo tasksel
+```
+
+Use the arrow keys to highlight your DE and press **Space** to select it (you should see an asterisk `*` appear), then press **Enter** to install.
 
 ## After Install
 
