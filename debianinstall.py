@@ -14,7 +14,7 @@ from pathlib import Path
 from shutil import which
 from typing import Any
 
-VERSION = 'v0.0.6'
+VERSION = 'v0.0.8'
 BANNER_URL = 'https://github.com/linuxgamerlife/debianinstaller'
 
 PHASES: tuple[str, ...] = (
@@ -621,6 +621,8 @@ def setup_graphical_target(state: State) -> None:
 def install_packages(state: State) -> None:
     config = state.config
     run_in_chroot(state, ['apt', 'update'], phase='apt-update')
+    # Install firmware before the kernel so initramfs includes it
+    run_in_chroot(state, ['apt', 'install', '-y', 'firmware-linux', 'firmware-linux-nonfree', 'firmware-amd-graphics', 'firmware-misc-nonfree'], phase='install-firmware')
     packages = ['linux-image-amd64', 'systemd-sysv', *PACKAGE_PROFILES[config.package_profile]]
     run_in_chroot(state, ['apt', 'install', '-y', *packages], phase='install-packages')
 
@@ -635,6 +637,9 @@ def configure_system(state: State) -> None:
     if config.package_profile == 'standard-tty':
         run_in_chroot(state, ['systemctl', 'enable', 'NetworkManager'], phase='services')
         run_in_chroot(state, ['systemctl', 'enable', 'ssh'], phase='services')
+    # Disable CUPS if installed — hangs at boot waiting for a printer that doesn't exist
+    run_in_chroot(state, ['bash', '-lc', 'systemctl mask cups 2>/dev/null || true'], phase='mask-cups')
+    run_in_chroot(state, ['bash', '-lc', 'systemctl mask cups-browsed 2>/dev/null || true'], phase='mask-cups')
     setup_graphical_target(state)
 
 

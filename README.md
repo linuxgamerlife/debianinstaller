@@ -1,4 +1,4 @@
-# LGL Debian Installer v0.0.6
+# LGL Debian Installer v0.0.8
 
 This exists because I was curious whether you can get something close to the same experience as Arch, but on Debian.
 
@@ -12,7 +12,7 @@ This is NO LONGER just built for VMs only, so you CAN accidentally screw up your
 
 The current goal is simple:
 
-- start from a Debian live environment (Recommended in a VM)
+- start from a Debian live environment (Recommended)in a VM
 - run the installer from TTY
 - get through the base install, then configure locale, timezone, keyboard, and desktop environment interactively using the native Debian tools
 - reboot into your chosen desktop environment
@@ -40,7 +40,7 @@ Every run starts with:
 
 ```
 -----------------------------------------------------
-|            LGL Debian Installer v0.0.6            |
+|            LGL Debian Installer v0.0.8            |
 |                  100% Vibe Coded                  |
 |               Intelligently Prompted              |
 | https://github.com/linuxgamerlife/debianinstaller |
@@ -109,14 +109,21 @@ i386 architecture is enabled by default (required for Steam and 32-bit software)
 
 `linux-image-amd64` and `systemd-sysv` are installed on top of whichever profile you pick.
 
+The following firmware packages are installed before the kernel on every install, so firmware is baked into the initramfs:
+
+- `firmware-linux` / `firmware-linux-nonfree` — general Linux firmware
+- `firmware-amd-graphics` — AMD GPU firmware, required for SDDM/Xorg to start on AMD hardware
+- `firmware-misc-nonfree` — covers a wide range of USB devices, webcams, and controllers
+
+This prevents boot issues with USB controllers, AMD GPUs, and other devices that require firmware to initialise.
+
 ## Interactive Configuration Mid-Install
 
 After packages land, the installer drops you into the standard Debian ncurses configuration screens in order:
 
-1. **locales** — select your locale
-2. **tzdata** — select your timezone
-3. **keyboard-configuration** — select your keyboard layout
-4. **tasksel** — select a desktop environment (or skip for TTY only)
+1. **tzdata** — select your timezone
+2. **keyboard-configuration** — select your keyboard layout
+3. **tasksel** — select a desktop environment (or skip for TTY only)
 
 These run inside the chroot so your choices apply to the installed system directly.
 
