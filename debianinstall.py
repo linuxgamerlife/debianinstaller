@@ -458,6 +458,7 @@ def run(state: State) -> None:
             state.completed_phases.append(phase)
             save_state(state)
         if state.config.execute:
+            print('\nAlmost there! A few final optional steps before we finish.')
             prompt_backports_kernel(state)
     finally:
         if state.config.execute and has_active_mounts(Path(state.config.target_mount)):
@@ -674,7 +675,14 @@ def install_bootloader(state: State) -> None:
 
 
 def prompt_backports_kernel(state: State) -> None:
-    answer = input(f'\nInstall latest kernel from {state.config.release}-backports? [y/N]: ').strip().lower()
+    print()
+    print(make_box([
+        f'Install latest kernel from {state.config.release}-backports?',
+        'This gives you the newest kernel available for',
+        f'{state.config.release}. Recommended for latest hardware support.',
+        'Press y to install, or Enter to skip.',
+    ], align='left'))
+    answer = input('\n[y/N]: ').strip().lower()
     if answer != 'y':
         return
     run_in_chroot(state, ['apt', 'install', '-y', '-t', f'{state.config.release}-backports', 'linux-image-amd64'], phase='backports-kernel')
@@ -682,7 +690,13 @@ def prompt_backports_kernel(state: State) -> None:
 
 
 def prompt_reboot() -> None:
-    answer = input('\nReboot now? [y/N]: ').strip().lower()
+    print()
+    print(make_box([
+        'Reboot?',
+        'The install is complete. Reboot now to boot into',
+        'your new system.',
+    ], align='left'))
+    answer = input('\n[y/N]: ').strip().lower()
     if answer == 'y':
         subprocess.run(['reboot'], check=False)
 

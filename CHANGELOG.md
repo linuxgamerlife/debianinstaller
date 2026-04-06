@@ -7,6 +7,8 @@
 - `lsblk` output shown before disk selection in the wizard (both VM and real hardware)
 - Immediate disk confirmation after entering disk name — "Use /dev/vda? This will erase all data."
 - Screen cleared on first run before banner
+- "Almost there!" message before final optional steps
+- Boxed banners for backports kernel prompt and reboot prompt explaining what each does
 
 ### Changed
 
