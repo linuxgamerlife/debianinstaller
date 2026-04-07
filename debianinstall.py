@@ -106,7 +106,7 @@ class Config:
     swap_type: str = 'none'           # none / swapfile / partition
     swap_size: str = '2G'
     separate_home: bool = False
-    root_size: str = '50G'            # only used when separate_home=True
+    root_size: str = ''               # only used when separate_home=True; prompted with disk size hint
     home_size: str = ''               # empty = rest of disk
     audio: str = 'pipewire'           # pipewire / pulseaudio / none
     network_backend: str = 'networkmanager'  # networkmanager / systemd-networkd
@@ -391,10 +391,29 @@ def prompt_home(config: Config) -> Config:
     answer = input(f'Separate /home partition? [current: {"yes" if config.separate_home else "no"}] [y/N]: ').strip().lower()
     if answer == 'y':
         config.separate_home = True
-        config.root_size = prompt_text('Root partition size', config.root_size)
+        disk_size = get_disk_size_human(config.disk)
+        hint = f' (disk is {disk_size})' if disk_size else ''
+        print(f'  Root partition size{hint}. Home will take the rest of the disk.')
+        while True:
+            value = input(f'Root partition size (e.g. 20G): ').strip()
+            if value:
+                config.root_size = value
+                break
+            print('  Please enter a size.')
     elif answer == 'n':
         config.separate_home = False
     return config
+
+
+def get_disk_size_human(disk: str) -> str:
+    try:
+        result = subprocess.run(
+            ['lsblk', '-dn', '-o', 'SIZE', disk],
+            capture_output=True, text=True, check=True,
+        )
+        return result.stdout.strip()
+    except Exception:
+        return ''
 
 
 def prompt_audio(current: str) -> str:
@@ -829,7 +848,7 @@ def configure_system(state: State) -> None:
 
     # Swapfile
     if config.swap_type == 'swapfile':
-        run_in_chroot(state, ['bash', '-lc', f'fallocate -l {config.swap_size} /swapfile && chmod 600 /swapfile && mkswap /swapfile'], phase='swapfile')
+        run_in_chroot(state, ['bash', '-lc', f'touch /swapfile && chattr +C /swapfile && fallocate -l {config.swap_size} /swapfile && chmod 600 /swapfile && mkswap /swapfile'], phase='swapfile')
     # Disable CUPS if installed — hangs at boot waiting for a printer that doesn't exist
     run_in_chroot(state, ['bash', '-lc', 'systemctl mask cups 2>/dev/null || true'], phase='mask-cups')
     run_in_chroot(state, ['bash', '-lc', 'systemctl mask cups-browsed 2>/dev/null || true'], phase='mask-cups')

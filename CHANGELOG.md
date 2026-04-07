@@ -6,7 +6,7 @@
 
 - **Filesystem selection** — ext4 (default), btrfs (with `@`/`@home` subvolumes, zstd compression, noatime), xfs
 - **Swap** — none, swapfile, or dedicated partition; size configurable
-- **Separate /home partition** — optional, root size configurable, rest of disk goes to home
+- **Separate /home partition** — optional, root size prompted with disk size hint, rest of disk goes to home
 - **Audio selection** — pipewire (default, includes wireplumber + pipewire-pulse), pulseaudio, or none
 - **Network backend selection** — NetworkManager (default) or systemd-networkd (with auto wired DHCP config)
 - Wizard expanded to 10 steps; summary menu updated to show all 10 options
@@ -14,6 +14,11 @@
 - btrfs/xfs tools installed inside chroot via package profile
 - Cleanup now unmounts `/home` before root
 - Clear screen after each ncurses configuration section (tzdata, keyboard, tasksel)
+
+### Fixed
+
+- btrfs swapfile: `chattr +C` applied before `fallocate` to disable copy-on-write — required for swap to activate on btrfs
+- Root partition size no longer defaults to `50G` — disk size shown as hint, user must enter value explicitly
 
 ---
 
