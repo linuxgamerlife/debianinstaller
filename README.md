@@ -1,4 +1,8 @@
-# LGL Debian Installer v0.0.8
+# LGL Debian Installer v0.0.9
+
+> ## ⚠️ WARNING — UNTESTED
+> **v0.0.9 introduces major new features (filesystem selection, btrfs, swap, separate /home, audio, network backend) that have NOT been tested end-to-end.**
+> **Do NOT use on any machine you care about until this warning is removed.**
 
 This exists because I was curious whether you can get something close to the same experience as Arch, but on Debian.
 

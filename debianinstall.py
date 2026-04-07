@@ -14,7 +14,7 @@ from pathlib import Path
 from shutil import which
 from typing import Any
 
-VERSION = 'v0.0.8'
+VERSION = 'v0.0.9'
 BANNER_URL = 'https://github.com/linuxgamerlife/debianinstaller'
 
 PHASES: tuple[str, ...] = (
@@ -102,6 +102,14 @@ class Config:
     state_file: str = '/var/tmp/debianinstall-state.json'
     log_file: str | None = None
     skip_vm_check: bool = False
+    filesystem: str = 'ext4'          # ext4 / btrfs / xfs
+    swap_type: str = 'none'           # none / swapfile / partition
+    swap_size: str = '2G'
+    separate_home: bool = False
+    root_size: str = '50G'            # only used when separate_home=True
+    home_size: str = ''               # empty = rest of disk
+    audio: str = 'pipewire'           # pipewire / pulseaudio / none
+    network_backend: str = 'networkmanager'  # networkmanager / systemd-networkd
 
     @property
     def execute(self) -> bool:
@@ -116,7 +124,24 @@ class Config:
         return self.partition_path(1)
 
     @property
+    def root_partition_number(self) -> int:
+        # swap partition (if present) is always p2, pushing root to p3
+        return 3 if self.swap_type == 'partition' else 2
+
+    @property
     def root_partition(self) -> str:
+        return self.partition_path(self.root_partition_number)
+
+    @property
+    def home_partition(self) -> str | None:
+        if not self.separate_home:
+            return None
+        return self.partition_path(self.root_partition_number + 1)
+
+    @property
+    def swap_partition(self) -> str | None:
+        if self.swap_type != 'partition':
+            return None
         return self.partition_path(2)
 
     @property
@@ -259,6 +284,21 @@ def run_interactive_setup(config: Config) -> Config:
     print('  The state file records completed phases so the install can resume if interrupted.')
     config.state_file = prompt_text('State file', config.state_file)
 
+    print('\nStep 6: Filesystem')
+    config.filesystem = prompt_filesystem(config.filesystem)
+
+    print('\nStep 7: Swap')
+    config = prompt_swap(config)
+
+    print('\nStep 8: Separate /home partition?')
+    config = prompt_home(config)
+
+    print('\nStep 9: Audio')
+    config.audio = prompt_audio(config.audio)
+
+    print('\nStep 10: Network backend')
+    config.network_backend = prompt_network(config.network_backend)
+
     while True:
         os.system('clear')
         print(render_banner())
@@ -284,6 +324,16 @@ def run_interactive_setup(config: Config) -> Config:
                 config.package_profile = prompt_profile(config.package_profile)
             elif n == 5:
                 config.state_file = prompt_text('State file', config.state_file)
+            elif n == 6:
+                config.filesystem = prompt_filesystem(config.filesystem)
+            elif n == 7:
+                config = prompt_swap(config)
+            elif n == 8:
+                config = prompt_home(config)
+            elif n == 9:
+                config.audio = prompt_audio(config.audio)
+            elif n == 10:
+                config.network_backend = prompt_network(config.network_backend)
         else:
             print('Invalid choice.')
 
@@ -298,13 +348,68 @@ def prompt_disk(current: str) -> str:
 
 
 def render_summary_menu(config: Config) -> str:
+    swap_display = config.swap_type if config.swap_type == 'none' else f'{config.swap_type} ({config.swap_size})'
+    home_display = f'yes (root: {config.root_size}, home: rest)' if config.separate_home else 'no'
     return '\n'.join([
-        f'1. disk:            {config.disk}',
-        f'2. hostname:        {config.hostname}',
-        f'3. username:        {config.username}',
-        f'4. package profile: {config.package_profile}',
-        f'5. state file:      {config.state_file}',
+        f' 1. disk:             {config.disk}',
+        f' 2. hostname:         {config.hostname}',
+        f' 3. username:         {config.username}',
+        f' 4. package profile:  {config.package_profile}',
+        f' 5. state file:       {config.state_file}',
+        f' 6. filesystem:       {config.filesystem}',
+        f' 7. swap:             {swap_display}',
+        f' 8. separate /home:   {home_display}',
+        f' 9. audio:            {config.audio}',
+        f'10. network backend:  {config.network_backend}',
     ])
+
+
+def prompt_filesystem(current: str) -> str:
+    print('  1. ext4  — stable, widely supported (recommended)')
+    print('  2. btrfs — snapshots, compression, modern')
+    print('  3. xfs   — high performance, good for large files')
+    choice = input(f'Filesystem [current: {current}]: ').strip()
+    return {'1': 'ext4', '2': 'btrfs', '3': 'xfs'}.get(choice, current if choice == '' else (choice if choice in ('ext4', 'btrfs', 'xfs') else current))
+
+
+def prompt_swap(config: Config) -> Config:
+    print('  1. none')
+    print('  2. swapfile (recommended — flexible, no partition needed)')
+    print('  3. partition')
+    choice = input(f'Swap [current: {config.swap_type}]: ').strip()
+    mapping = {'1': 'none', '2': 'swapfile', '3': 'partition'}
+    if choice in mapping:
+        config.swap_type = mapping[choice]
+    elif choice in ('none', 'swapfile', 'partition'):
+        config.swap_type = choice
+    if config.swap_type in ('swapfile', 'partition'):
+        config.swap_size = prompt_text('Swap size', config.swap_size)
+    return config
+
+
+def prompt_home(config: Config) -> Config:
+    answer = input(f'Separate /home partition? [current: {"yes" if config.separate_home else "no"}] [y/N]: ').strip().lower()
+    if answer == 'y':
+        config.separate_home = True
+        config.root_size = prompt_text('Root partition size', config.root_size)
+    elif answer == 'n':
+        config.separate_home = False
+    return config
+
+
+def prompt_audio(current: str) -> str:
+    print('  1. pipewire   — modern, recommended (handles PulseAudio apps too)')
+    print('  2. pulseaudio — classic audio server')
+    print('  3. none')
+    choice = input(f'Audio [current: {current}]: ').strip()
+    return {'1': 'pipewire', '2': 'pulseaudio', '3': 'none'}.get(choice, current if choice == '' else (choice if choice in ('pipewire', 'pulseaudio', 'none') else current))
+
+
+def prompt_network(current: str) -> str:
+    print('  1. networkmanager   — recommended, works with all DEs')
+    print('  2. systemd-networkd — lightweight, good for servers/minimal installs')
+    choice = input(f'Network backend [current: {current}]: ').strip()
+    return {'1': 'networkmanager', '2': 'systemd-networkd'}.get(choice, current if choice == '' else (choice if choice in ('networkmanager', 'systemd-networkd') else current))
 
 
 def confirm_non_vm_install() -> bool:
@@ -501,22 +606,75 @@ def run_phase(phase: str, state: State) -> None:
 
 def partition_disk(state: State) -> None:
     config = state.config
-    script = '\n'.join([
-        'g', 'n', '', '', f'+{config.efi_size}' if not config.efi_size.startswith('+') else config.efi_size,
-        't', '1', 'n', '', '', '', 'w',
-    ]) + '\n'
-    run_command(['fdisk', config.disk], phase='partition', state=state, input_text=script)
+    efi_size = config.efi_size if config.efi_size.startswith('+') else f'+{config.efi_size}'
+    lines: list[str] = ['g']
+
+    # p1: EFI
+    lines += ['n', '', '', efi_size]
+    lines += ['t', '1']  # type: EFI System (auto-select since only 1 partition)
+
+    # p2: swap partition (optional)
+    if config.swap_type == 'partition':
+        swap_size = config.swap_size if config.swap_size.startswith('+') else f'+{config.swap_size}'
+        lines += ['n', '', '', swap_size]
+        lines += ['t', '2', '19']  # partition 2, type: Linux swap
+
+    # root partition (takes rest unless separate_home)
+    if config.separate_home:
+        root_size = config.root_size if config.root_size.startswith('+') else f'+{config.root_size}'
+        lines += ['n', '', '', root_size]
+    else:
+        lines += ['n', '', '', '']  # rest of disk
+
+    # home partition (takes rest of disk)
+    if config.separate_home:
+        lines += ['n', '', '', '']
+
+    lines += ['w']
+    run_command(['fdisk', config.disk], phase='partition', state=state, input_text='\n'.join(lines) + '\n')
 
 
 def format_filesystems(state: State) -> None:
     config = state.config
-    run_command(['/sbin/mkfs.ext4', config.root_partition], phase='format-root', state=state)
+    fs = config.filesystem
+
+    if fs == 'ext4':
+        run_command(['/sbin/mkfs.ext4', '-F', config.root_partition], phase='format-root', state=state)
+    elif fs == 'btrfs':
+        run_command(['mkfs.btrfs', '-f', config.root_partition], phase='format-root', state=state)
+    elif fs == 'xfs':
+        run_command(['mkfs.xfs', '-f', config.root_partition], phase='format-root', state=state)
+
     run_command(['/sbin/mkfs.fat', '-F32', config.efi_partition], phase='format-efi', state=state)
+
+    if config.home_partition:
+        run_command(['/sbin/mkfs.ext4', '-F', config.home_partition], phase='format-home', state=state)
+
+    if config.swap_partition:
+        run_command(['/sbin/mkswap', config.swap_partition], phase='format-swap', state=state)
 
 
 def mount_target(state: State) -> None:
     config = state.config
-    run_command(['mount', config.root_partition, config.target_mount], phase='mount-root', state=state)
+
+    if config.filesystem == 'btrfs':
+        # Mount flat to create subvolumes, then remount with subvol=@
+        run_command(['mount', config.root_partition, config.target_mount], phase='mount-root-flat', state=state)
+        run_command(['btrfs', 'subvolume', 'create', f'{config.target_mount}/@'], phase='btrfs-subvol-root', state=state)
+        if not config.separate_home:
+            run_command(['btrfs', 'subvolume', 'create', f'{config.target_mount}/@home'], phase='btrfs-subvol-home', state=state)
+        run_command(['umount', config.target_mount], phase='mount-root-flat-umount', state=state)
+        run_command(['mount', '-o', 'subvol=@,compress=zstd,noatime', config.root_partition, config.target_mount], phase='mount-root', state=state)
+        if not config.separate_home:
+            run_command(['mkdir', '-p', f'{config.target_mount}/home'], phase='mkdir-home', state=state)
+            run_command(['mount', '-o', 'subvol=@home,compress=zstd,noatime', config.root_partition, f'{config.target_mount}/home'], phase='mount-home', state=state)
+    else:
+        run_command(['mount', config.root_partition, config.target_mount], phase='mount-root', state=state)
+
+    if config.home_partition:
+        run_command(['mkdir', '-p', f'{config.target_mount}/home'], phase='mkdir-home', state=state)
+        run_command(['mount', config.home_partition, f'{config.target_mount}/home'], phase='mount-home', state=state)
+
     run_command(['mkdir', '-p', config.efi_mount], phase='mount-efi', state=state)
     run_command(['mount', '-t', 'vfat', config.efi_partition, config.efi_mount], phase='mount-efi', state=state)
 
@@ -535,7 +693,12 @@ def mount_virtual(state: State) -> None:
 
 def install_live_prerequisites(state: State) -> None:
     run_command(['apt-get', 'update'], phase='host-apt-update', state=state)
-    run_command(['apt-get', 'install', '-y', *LIVE_PREREQUISITE_PACKAGES], phase='host-install-prereqs', state=state)
+    extra: list[str] = []
+    if state.config.filesystem == 'btrfs':
+        extra.append('btrfs-progs')
+    elif state.config.filesystem == 'xfs':
+        extra.append('xfsprogs')
+    run_command(['apt-get', 'install', '-y', *LIVE_PREREQUISITE_PACKAGES, *extra], phase='host-install-prereqs', state=state)
 
 
 def write_sources(state: State) -> None:
@@ -588,6 +751,7 @@ def interactive_config(state: State) -> None:
         print(line)
         if config.execute:
             subprocess.run(chroot_cmd, check=True)
+            os.system('clear')
 
 
 def setup_graphical_target(state: State) -> None:
@@ -623,7 +787,25 @@ def install_packages(state: State) -> None:
     run_in_chroot(state, ['apt', 'update'], phase='apt-update')
     # Install firmware before the kernel so initramfs includes it
     run_in_chroot(state, ['apt', 'install', '-y', 'firmware-linux', 'firmware-linux-nonfree', 'firmware-amd-graphics', 'firmware-misc-nonfree'], phase='install-firmware')
+
     packages = ['linux-image-amd64', 'systemd-sysv', *PACKAGE_PROFILES[config.package_profile]]
+
+    # Filesystem tools inside chroot
+    if config.filesystem == 'btrfs':
+        packages.append('btrfs-progs')
+    elif config.filesystem == 'xfs':
+        packages.append('xfsprogs')
+
+    # Audio
+    if config.audio == 'pipewire':
+        packages += ['pipewire', 'pipewire-pulse', 'wireplumber']
+    elif config.audio == 'pulseaudio':
+        packages.append('pulseaudio')
+
+    # Remove network-manager if using systemd-networkd
+    if config.network_backend == 'systemd-networkd' and 'network-manager' in packages:
+        packages.remove('network-manager')
+
     run_in_chroot(state, ['apt', 'install', '-y', *packages], phase='install-packages')
 
 
@@ -634,9 +816,20 @@ def configure_system(state: State) -> None:
     run_in_chroot(state, ['bash', '-lc', f"printf '%s\\n' {hostname} > /etc/hostname"], phase='hostname')
     run_in_chroot(state, ['bash', '-lc', f"cat > /etc/hosts <<'EOF'\n{hosts_content}\nEOF"], phase='hosts')
     run_in_chroot(state, ['bash', '-lc', "printf 'en_US.UTF-8 UTF-8\\n' > /etc/locale.gen && locale-gen && update-locale LANG=en_US.UTF-8"], phase='locale')
-    if config.package_profile == 'standard-tty':
+
+    # Network backend
+    if config.network_backend == 'systemd-networkd':
+        run_in_chroot(state, ['systemctl', 'enable', 'systemd-networkd'], phase='services')
+        run_in_chroot(state, ['systemctl', 'enable', 'systemd-resolved'], phase='services')
+        networkd_conf = '\n'.join(['[Match]', 'Name=en*', '', '[Network]', 'DHCP=yes'])
+        run_in_chroot(state, ['bash', '-lc', f"mkdir -p /etc/systemd/network && cat > /etc/systemd/network/20-wired.network <<'EOF'\n{networkd_conf}\nEOF"], phase='networkd-config')
+    elif config.package_profile == 'standard-tty':
         run_in_chroot(state, ['systemctl', 'enable', 'NetworkManager'], phase='services')
         run_in_chroot(state, ['systemctl', 'enable', 'ssh'], phase='services')
+
+    # Swapfile
+    if config.swap_type == 'swapfile':
+        run_in_chroot(state, ['bash', '-lc', f'fallocate -l {config.swap_size} /swapfile && chmod 600 /swapfile && mkswap /swapfile'], phase='swapfile')
     # Disable CUPS if installed — hangs at boot waiting for a printer that doesn't exist
     run_in_chroot(state, ['bash', '-lc', 'systemctl mask cups 2>/dev/null || true'], phase='mask-cups')
     run_in_chroot(state, ['bash', '-lc', 'systemctl mask cups-browsed 2>/dev/null || true'], phase='mask-cups')
@@ -645,11 +838,40 @@ def configure_system(state: State) -> None:
 
 def write_fstab(state: State) -> None:
     config = state.config
-    shell = ' && '.join([
+    fs = config.filesystem
+
+    blkid_vars = [
         f'root_uuid=$(/sbin/blkid -s UUID -o value {config.root_partition})',
         f'efi_uuid=$(/sbin/blkid -s UUID -o value {config.efi_partition})',
-        'cat > /etc/fstab <<EOF\nUUID="${root_uuid}" / ext4 defaults 0 1\nUUID="${efi_uuid}" /boot/efi vfat umask=0077 0 1\nEOF',
-    ])
+    ]
+    if config.home_partition:
+        blkid_vars.append(f'home_uuid=$(/sbin/blkid -s UUID -o value {config.home_partition})')
+    if config.swap_partition:
+        blkid_vars.append(f'swap_uuid=$(/sbin/blkid -s UUID -o value {config.swap_partition})')
+
+    if fs == 'btrfs':
+        root_line = f'UUID="${{root_uuid}}" / btrfs subvol=@,compress=zstd,noatime 0 0'
+    elif fs == 'xfs':
+        root_line = f'UUID="${{root_uuid}}" / xfs defaults 0 1'
+    else:
+        root_line = f'UUID="${{root_uuid}}" / ext4 defaults 0 1'
+
+    fstab_lines = [
+        root_line,
+        f'UUID="${{efi_uuid}}" /boot/efi vfat umask=0077 0 1',
+    ]
+
+    if fs == 'btrfs' and not config.separate_home:
+        fstab_lines.append(f'UUID="${{root_uuid}}" /home btrfs subvol=@home,compress=zstd,noatime 0 0')
+    if config.home_partition:
+        fstab_lines.append(f'UUID="${{home_uuid}}" /home ext4 defaults 0 2')
+    if config.swap_partition:
+        fstab_lines.append(f'UUID="${{swap_uuid}}" none swap sw 0 0')
+    if config.swap_type == 'swapfile':
+        fstab_lines.append('/swapfile none swap sw 0 0')
+
+    fstab_content = '\n'.join(fstab_lines)
+    shell = ' && '.join(blkid_vars) + f' && cat > /etc/fstab <<EOF\n{fstab_content}\nEOF'
     run_command(['chroot', config.target_mount, 'bash', '-lc', shell], phase='fstab', state=state)
 
 
@@ -714,6 +936,7 @@ def cleanup(state: State) -> None:
         f"mountpoint -q {target}/proc && umount {target}/proc || true",
         f"mountpoint -q {target}/sys && umount {target}/sys || true",
         f"mountpoint -q {target}/boot/efi && umount {target}/boot/efi || true",
+        f"mountpoint -q {target}/home && umount {target}/home || true",
         f"mountpoint -q {target} && umount {target} || true",
     ]
     for shell_command in cleanup_shells:

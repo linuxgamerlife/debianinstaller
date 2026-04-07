@@ -1,5 +1,44 @@
 # Changelog
 
+## v0.0.9 — 2026-04-06 ⚠️ UNTESTED
+
+### Added
+
+- **Filesystem selection** — ext4 (default), btrfs (with `@`/`@home` subvolumes, zstd compression, noatime), xfs
+- **Swap** — none, swapfile, or dedicated partition; size configurable
+- **Separate /home partition** — optional, root size configurable, rest of disk goes to home
+- **Audio selection** — pipewire (default, includes wireplumber + pipewire-pulse), pulseaudio, or none
+- **Network backend selection** — NetworkManager (default) or systemd-networkd (with auto wired DHCP config)
+- Wizard expanded to 10 steps; summary menu updated to show all 10 options
+- Live prerequisites auto-install `btrfs-progs` or `xfsprogs` based on selected filesystem
+- btrfs/xfs tools installed inside chroot via package profile
+- Cleanup now unmounts `/home` before root
+- Clear screen after each ncurses configuration section (tzdata, keyboard, tasksel)
+
+---
+
+## v0.0.8 — 2026-04-06
+
+### Added
+
+- `firmware-amd-graphics` added to firmware install step — required for SDDM/Xorg to start on AMD hardware
+- `firmware-misc-nonfree` added to firmware install step — covers USB devices, webcams, and controllers
+
+### Fixed
+
+- CUPS masking changed from `disable` to `mask` — `disable` was not surviving into the installed system; `mask` (symlink to `/dev/null`) is more forceful and persists across reboots
+
+---
+
+## v0.0.7 — 2026-04-06
+
+### Added
+
+- `firmware-linux` and `firmware-linux-nonfree` installed before the kernel on every install — ensures firmware is baked into initramfs, preventing USB and hardware boot failures on real hardware
+- CUPS and cups-browsed disabled automatically after install — prevents boot hang when no printer is present
+
+---
+
 ## v0.0.6 — 2026-04-06
 
 ### Changed
