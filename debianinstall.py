@@ -25,6 +25,7 @@ PHASES: tuple[str, ...] = (
     'virtual-mounts',
     'sources',
     'packages',
+    'build-from-source',
     'interactive-config',
     'system-config',
     'fstab',
@@ -626,6 +627,8 @@ def run_phase(phase: str, state: State) -> None:
         write_sources(state)
     elif phase == 'packages':
         install_packages(state)
+    elif phase == 'build-from-source':
+        build_from_source(state)
     elif phase == 'interactive-config':
         interactive_config(state)
     elif phase == 'system-config':
@@ -858,13 +861,89 @@ def install_packages(state: State) -> None:
 
     if config.desktop == 'niri-noctalia':
         run_in_chroot(state, ['apt', 'install', '-y',
-            'niri', 'noctalia-shell', 'greetd',
+            'noctalia-shell', 'greetd',
             'libgl1-mesa-dri',
             'alacritty',
             'fuzzel',
             'xdg-desktop-portal-gtk',
             'swayidle',
         ], phase='install-desktop')
+
+
+def build_from_source(state: State) -> None:
+    """Build niri and xwayland-satellite from source inside the chroot.
+    Neither package is available in the Debian Trixie repos."""
+    if state.config.desktop != 'niri-noctalia':
+        return
+
+    print()
+    print(make_box([
+        'Building niri and xwayland-satellite from source.',
+        '',
+        'Neither package is available in the Debian Trixie repos,',
+        'so they will be compiled directly on this machine.',
+        '',
+        'This step may take a long time depending on:',
+        '  - Your CPU speed  (compilation is intensive)',
+        '  - Your internet connection  (Cargo downloads crate dependencies)',
+        '',
+        'Do not interrupt the install. Resume support is available',
+        'via --resume if something goes wrong.',
+    ], align='left'))
+    print()
+
+    build_deps = [
+        'git', 'rustup', 'gcc', 'clang', 'pkg-config',
+        # niri build deps (from niri_install.md and spec file)
+        'libudev-dev', 'libgbm-dev', 'libxkbcommon-dev', 'libegl-dev',
+        'libwayland-dev', 'libinput-dev', 'libdbus-1-dev', 'libsystemd-dev',
+        'libseat-dev', 'libpipewire-0.3-dev', 'libpango1.0-dev',
+        'libdisplay-info-dev', 'libcairo2-dev',
+        # xwayland-satellite build deps
+        'libxcb-dev', 'libxcb-composite0-dev', 'libxcb-damage0-dev',
+        'libxcb-xfixes0-dev', 'libxcb-render0-dev', 'libxcb-shape0-dev',
+        # xwayland runtime (launched by xwayland-satellite)
+        'xwayland',
+    ]
+    run_in_chroot(state, ['apt', 'install', '-y', *build_deps], phase='install-build-deps')
+
+    rust_env = '\n'.join([
+        'export HOME=/root',
+        'export RUSTUP_HOME=/root/.rustup',
+        'export CARGO_HOME=/root/.cargo',
+        'export PATH=/root/.cargo/bin:$PATH',
+    ])
+
+    niri_script = '\n'.join([
+        'set -e',
+        rust_env,
+        'rustup default stable',
+        'git clone --depth=1 https://github.com/YaLTeR/niri.git /tmp/niri-build',
+        'cd /tmp/niri-build',
+        'cargo build --release',
+        'install -Dm755 target/release/niri /usr/local/bin/niri',
+        'install -Dm755 resources/niri-session /usr/local/bin/niri-session',
+        'mkdir -p /usr/share/wayland-sessions',
+        'install -Dm644 resources/niri.desktop /usr/share/wayland-sessions/niri.desktop',
+        'mkdir -p /usr/share/xdg-desktop-portal',
+        'install -Dm644 resources/niri-portals.conf /usr/share/xdg-desktop-portal/niri-portals.conf',
+        'mkdir -p /usr/lib/systemd/user',
+        'install -Dm644 resources/niri.service /usr/lib/systemd/user/niri.service',
+        'install -Dm644 resources/niri-shutdown.target /usr/lib/systemd/user/niri-shutdown.target',
+        'rm -rf /tmp/niri-build',
+    ])
+    run_in_chroot(state, ['bash', '-c', niri_script], phase='build-niri')
+
+    xws_script = '\n'.join([
+        'set -e',
+        rust_env,
+        'git clone --depth=1 https://github.com/Supreeeme/xwayland-satellite.git /tmp/xws-build',
+        'cd /tmp/xws-build',
+        'cargo build --release',
+        'install -Dm755 target/release/xwayland-satellite /usr/local/bin/xwayland-satellite',
+        'rm -rf /tmp/xws-build',
+    ])
+    run_in_chroot(state, ['bash', '-c', xws_script], phase='build-xwayland-satellite')
 
 
 def configure_system(state: State) -> None:

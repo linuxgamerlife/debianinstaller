@@ -9,10 +9,12 @@
 - Removed `tasksel` from all package profiles
 - When `niri-noctalia` is selected:
   - Noctalia apt repo added to sources (GPG key fetched on host before chroot)
-  - `niri`, `noctalia-shell`, `greetd` installed
-  - Runtime deps: `libgl1-mesa-dri`
+  - `noctalia-shell`, `greetd` installed via apt
+  - Runtime deps: `libgl1-mesa-dri`, `xwayland`
   - Default config utilities: `alacritty`, `fuzzel`
   - Desktop integration: `xdg-desktop-portal-gtk`, `swayidle`
+  - `niri` and `xwayland-satellite` built from source (not packaged in Debian Trixie); new `build-from-source` phase handles this with all required build deps installed first
+  - Banner displayed before source builds explaining compilation time and internet dependency
   - greetd configured to autologin the created user with `niri-session`
   - `graphical.target` set as default
 - When `none` is selected: `multi-user.target` set, no display stack installed

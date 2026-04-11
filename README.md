@@ -134,16 +134,29 @@ The following firmware packages are installed before the kernel on every install
 
 When **niri-noctalia** is selected, the following are installed from the Noctalia apt repo and Debian:
 
+**Installed via apt:**
+
 | Package | Purpose |
 |---|---|
-| `niri` | Scrollable-tiling Wayland compositor |
 | `noctalia-shell` | Full desktop shell — bar, dock, notifications, lock screen, settings |
 | `greetd` | Display manager — autologins your user into `niri-session` |
 | `libgl1-mesa-dri` | GPU drivers required for rendering |
+| `xwayland` | X11 server (launched by xwayland-satellite at runtime) |
 | `alacritty` | Terminal — bound to Super+T in niri's default config |
 | `fuzzel` | App launcher — bound to Super+D in niri's default config |
 | `xdg-desktop-portal-gtk` | Portals for file pickers, screen sharing, app integration |
 | `swayidle` | Idle and suspend management |
+
+**Built from source** (not packaged in Debian Trixie):
+
+| Package | Purpose |
+|---|---|
+| `niri` | Scrollable-tiling Wayland compositor |
+| `xwayland-satellite` | Rootless Xwayland support — run X11 apps under niri |
+
+Both are compiled with Cargo inside the chroot. All required build deps (`rustup`, `clang`, `gcc`, and the relevant `-dev` libraries) are installed automatically before the build starts.
+
+> **This step takes a while.** Compilation is CPU-intensive and Cargo downloads crate dependencies from the internet. The installer will display a notice when this phase begins. If the build is interrupted, use `--resume` to continue from where it left off.
 
 Noctalia itself pulls in `wl-clipboard`, `wlsunset`, `brightnessctl`, `cliphist`, and other desktop utilities as dependencies — these do not need to be listed separately.
 
