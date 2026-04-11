@@ -857,7 +857,15 @@ def install_packages(state: State) -> None:
     run_in_chroot(state, ['apt', 'install', '-y', *packages], phase='install-packages')
 
     if config.desktop == 'niri-noctalia':
-        run_in_chroot(state, ['apt', 'install', '-y', 'noctalia-shell', 'greetd'], phase='install-desktop')
+        run_in_chroot(state, ['apt', 'install', '-y',
+            'niri', 'noctalia-shell', 'greetd',
+            'xwayland-satellite',
+            'libgl1-mesa-dri',
+            'alacritty',
+            'fuzzel',
+            'xdg-desktop-portal-gtk',
+            'swayidle',
+        ], phase='install-desktop')
 
 
 def configure_system(state: State) -> None:

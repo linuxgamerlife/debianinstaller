@@ -7,8 +7,16 @@
 - **New direction** — installer is now focused on Niri + Noctalia as the desktop stack, with TTY-only as the alternative. tasksel is gone from the install flow.
 - Replaced tasksel DE selection with a dedicated **desktop** wizard step (step 11): `none` (TTY) or `niri-noctalia`
 - Removed `tasksel` from all package profiles
-- When `niri-noctalia` is selected: Noctalia apt repo added to sources, `noctalia-shell` and `greetd` installed, greetd configured to autologin the created user with `niri-session`, `graphical.target` set as default
+- When `niri-noctalia` is selected:
+  - Noctalia apt repo added to sources (GPG key fetched on host before chroot)
+  - `niri`, `noctalia-shell`, `greetd` installed
+  - Runtime deps: `xwayland-satellite`, `libgl1-mesa-dri`
+  - Default config utilities: `alacritty`, `fuzzel`
+  - Desktop integration: `xdg-desktop-portal-gtk`, `swayidle`
+  - greetd configured to autologin the created user with `niri-session`
+  - `graphical.target` set as default
 - When `none` is selected: `multi-user.target` set, no display stack installed
+- `curl` and `gnupg` added to live prerequisites (required to fetch the Noctalia GPG key on the host)
 - README updated to reflect new direction; added post-install instructions for installing other DEs manually (minimal) or via tasksel (more complete)
 
 ---

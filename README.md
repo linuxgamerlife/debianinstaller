@@ -132,11 +132,23 @@ The following firmware packages are installed before the kernel on every install
 
 ### Desktop: Niri + Noctalia
 
-When **niri-noctalia** is selected:
+When **niri-noctalia** is selected, the following are installed from the Noctalia apt repo and Debian:
 
-- `noctalia-shell` is installed from the Noctalia apt repo (brings in Niri as a dependency)
-- `greetd` is installed and configured to autologin your user directly into `niri-session`
-- `graphical.target` is set as the default systemd target
+| Package | Purpose |
+|---|---|
+| `niri` | Scrollable-tiling Wayland compositor |
+| `noctalia-shell` | Full desktop shell — bar, dock, notifications, lock screen, settings |
+| `greetd` | Display manager — autologins your user into `niri-session` |
+| `xwayland-satellite` | X11 app support under Wayland |
+| `libgl1-mesa-dri` | GPU drivers required for rendering |
+| `alacritty` | Terminal — bound to Super+T in niri's default config |
+| `fuzzel` | App launcher — bound to Super+D in niri's default config |
+| `xdg-desktop-portal-gtk` | Portals for file pickers, screen sharing, app integration |
+| `swayidle` | Idle and suspend management |
+
+Noctalia itself pulls in `wl-clipboard`, `wlsunset`, `brightnessctl`, `cliphist`, and other desktop utilities as dependencies — these do not need to be listed separately.
+
+`graphical.target` is set as the default systemd target.
 
 When **none** is selected, `multi-user.target` is set and no display stack is installed.
 
