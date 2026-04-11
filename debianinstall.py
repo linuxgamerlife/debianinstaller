@@ -75,6 +75,8 @@ LIVE_PREREQUISITE_PACKAGES = (
     'debootstrap',
     'dosfstools',
     'grub-efi-amd64',
+    'curl',
+    'gnupg',
 )
 
 
@@ -767,10 +769,12 @@ def write_sources(state: State) -> None:
     run_in_chroot(state, ['dpkg', '--add-architecture', 'i386'], phase='add-i386')
 
     if config.desktop == 'niri-noctalia':
-        # Add Noctalia apt repo (provides noctalia-shell and niri)
-        run_in_chroot(state, ['bash', '-c',
-            'curl -fsSL https://pkg.noctalia.dev/gpg.key | gpg --dearmor -o /etc/apt/keyrings/noctalia.gpg'],
-            phase='noctalia-gpg-key')
+        # Fetch Noctalia GPG key on the host (chroot has no curl/gpg yet at this phase)
+        keyring_dir = f'{target}/etc/apt/keyrings'
+        run_command(
+            ['bash', '-c', f'mkdir -p {keyring_dir} && curl -fsSL https://pkg.noctalia.dev/gpg.key | gpg --dearmor -o {keyring_dir}/noctalia.gpg'],
+            phase='noctalia-gpg-key', state=state,
+        )
         noctalia_sources = '\n'.join([
             'Types: deb',
             'URIs: https://pkg.noctalia.dev/apt',
