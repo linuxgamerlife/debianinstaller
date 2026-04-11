@@ -815,6 +815,12 @@ def interactive_config(state: State) -> None:
 def setup_graphical_target(state: State) -> None:
     config = state.config
     if config.desktop == 'niri-noctalia':
+        # If the user skipped the source build, niri-session won't exist — fall back to TTY
+        niri_session = Path(f'{config.target_mount}/usr/local/bin/niri-session')
+        if config.execute and not niri_session.exists():
+            print('[setup-graphical] niri-session not found — source build was skipped, setting multi-user.target')
+            run_in_chroot(state, ['systemctl', 'set-default', 'multi-user.target'], phase='default-target')
+            return
         # Configure greetd to autologin with niri-session
         greetd_config = '\n'.join([
             '[terminal]',
@@ -883,14 +889,32 @@ def build_from_source(state: State) -> None:
         'Neither package is available in the Debian Trixie repos,',
         'so they will be compiled directly on this machine.',
         '',
-        'This step may take a long time depending on:',
-        '  - Your CPU speed  (compilation is intensive)',
-        '  - Your internet connection  (Cargo downloads crate dependencies)',
+        'The compilation step will take the longest.',
+        'It will look like the installer is stuck — for example:',
+        '  484/485: Compiling niri',
+        'This is normal. It is just compiling. Do not interrupt it.',
         '',
-        'Do not interrupt the install. Resume support is available',
-        'via --resume if something goes wrong.',
+        'Speed depends on your CPU. A fast machine may take a few',
+        'minutes. A slow one could take considerably longer.',
+        '',
+        'Cargo also downloads crate dependencies from the internet,',
+        'so a slow connection will add to the time.',
+        '',
+        'Resume support is available via --resume if something',
+        'goes wrong.',
+        '',
+        'y  — continue with source build (recommended)',
+        'n  — skip to TTY install, install a DE manually later',
     ], align='left'))
     print()
+
+    if state.config.execute:
+        answer = input('Continue with source build? [y/N]: ').strip().lower()
+        if answer != 'y':
+            print('\nSkipping source build. System will boot to TTY.')
+            print('See the README for instructions on installing a desktop environment manually.')
+            run_in_chroot(state, ['systemctl', 'set-default', 'multi-user.target'], phase='default-target')
+            return
 
     build_deps = [
         'git', 'rustup', 'gcc', 'clang', 'pkg-config',
@@ -902,6 +926,7 @@ def build_from_source(state: State) -> None:
         # xwayland-satellite build deps
         'libxcb1-dev', 'libxcb-composite0-dev', 'libxcb-damage0-dev',
         'libxcb-xfixes0-dev', 'libxcb-render0-dev', 'libxcb-shape0-dev',
+        'libxcb-cursor-dev',
         # xwayland runtime (launched by xwayland-satellite)
         'xwayland',
     ]
