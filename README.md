@@ -1,6 +1,6 @@
 # LGL Debian Installer v0.1.0
 
-> ## ⚠️ WARNING — UNTESTED
+> ## ⚠️ WARNING - TESTED IN A VM ONLY - Works great
 > **v0.1.0 has NOT been tested end-to-end. Do NOT use on any machine you care about until this warning is removed.**
 
 This exists because I was curious whether you can get something close to the same experience as Arch, but on Debian.
@@ -11,7 +11,7 @@ This is a proof of concept. One thing I like about Arch is the build-from-nothin
 
 ## Current Scope
 
-This is NO LONGER just built for VMs only, so you CAN accidentally screw up your actual install if you are not careful!
+This is currently just built for VMs only, so you CAN accidentally screw up your actual install if you are not careful!
 
 The installer targets two outcomes:
 
