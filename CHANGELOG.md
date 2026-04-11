@@ -5,7 +5,8 @@
 ### Changed
 
 - **New direction** — installer is now focused on Niri + Noctalia as the desktop stack, with TTY-only as the alternative. tasksel is gone from the install flow.
-- Replaced tasksel DE selection with a dedicated **desktop** wizard step (step 11): `none` (TTY) or `niri-noctalia`
+- Replaced tasksel DE selection with a dedicated **desktop** wizard step (step 10): `none` (TTY) or `niri-noctalia`
+- Removed resume support (`--resume`, `--state-file`, state file wizard step) — resume was not working reliably; if the install fails, reboot, fdisk the drive, and start over
 - Removed `tasksel` from all package profiles
 - When `niri-noctalia` is selected:
   - Noctalia apt repo added to sources (GPG key fetched on host before chroot)
@@ -15,6 +16,7 @@
   - Desktop integration: `xdg-desktop-portal-gtk`, `swayidle`
   - `niri` and `xwayland-satellite` built from source (not packaged in Debian Trixie); new `build-from-source` phase handles this with all required build deps installed first
   - Banner displayed before source builds explaining compilation time and internet dependency
+  - niri config written to `~/.config/niri/config.kdl` with `spawn-at-startup "qs" "-c" "noctalia-shell"`; copies niri default config if present, otherwise creates a minimal config
   - greetd configured to autologin the created user with `niri-session`
   - `graphical.target` set as default
 - When `none` is selected: `multi-user.target` set, no display stack installed

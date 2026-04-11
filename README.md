@@ -57,13 +57,12 @@ Step 1:  Select disk
 Step 2:  Hostname
 Step 3:  Username
 Step 4:  Package profile
-Step 5:  State file
-Step 6:  Filesystem
-Step 7:  Swap
-Step 8:  Separate /home partition?
-Step 9:  Audio
-Step 10: Network backend
-Step 11: Desktop environment
+Step 5:  Filesystem
+Step 6:  Swap
+Step 7:  Separate /home partition?
+Step 8:  Audio
+Step 9:  Network backend
+Step 10: Desktop environment
 ```
 
 After completing the steps, the screen clears and shows a summary:
@@ -73,13 +72,12 @@ After completing the steps, the screen clears and shows a summary:
  2. hostname:         debian-vm
  3. username:         debian
  4. package profile:  standard-tty
- 5. state file:       /var/tmp/debianinstall-state.json
- 6. filesystem:       ext4
- 7. swap:             swapfile (2G)
- 8. separate /home:   no
- 9. audio:            pipewire
-10. network backend:  networkmanager
-11. desktop:          niri-noctalia
+ 5. filesystem:       ext4
+ 6. swap:             swapfile (2G)
+ 7. separate /home:   no
+ 8. audio:            pipewire
+ 9. network backend:  networkmanager
+10. desktop:          niri-noctalia
 
 Select number to change, or y to continue:
 ```
@@ -92,13 +90,13 @@ Locale, timezone, and keyboard layout are configured interactively mid-install u
 
 If no VM is detected, the installer shows a warning and runs `lsblk` so you can see your drives before deciding. You will be asked to confirm twice. Use with care.
 
-### Resume
+### If the install fails
 
-If an install is interrupted, resume from where it left off:
+There is no resume support. If the install fails at any point you will need to:
 
-```bash
-sudo ./debianinstall.py --resume
-```
+1. Reboot back into the live environment
+2. Wipe the drive: `sudo fdisk /dev/vda` — delete all partitions and write
+3. Start the installer from scratch: `sudo ./debianinstall.py --interactive`
 
 ## What Gets Installed
 
@@ -156,7 +154,7 @@ When **niri-noctalia** is selected, the following are installed from the Noctali
 
 Both are compiled with Cargo inside the chroot. All required build deps (`rustup`, `clang`, `gcc`, and the relevant `-dev` libraries) are installed automatically before the build starts.
 
-> **This step takes a while.** Compilation is CPU-intensive and Cargo downloads crate dependencies from the internet. The installer will display a notice when this phase begins. If the build is interrupted, use `--resume` to continue from where it left off.
+> **This step takes a while.** Compilation is CPU-intensive and Cargo downloads crate dependencies from the internet. The installer will display a notice when this phase begins. If it fails, reboot, wipe the drive with fdisk, and start over.
 
 Noctalia itself pulls in `wl-clipboard`, `wlsunset`, `brightnessctl`, `cliphist`, and other desktop utilities as dependencies — these do not need to be listed separately.
 
