@@ -1313,19 +1313,6 @@ def configure_system(state: State) -> None:
         ["bash", "-lc", "systemctl mask cups-browsed 2>/dev/null || true"],
         phase="mask-cups",
     )
-    if config.desktop == "niri-noctalia":
-        run_in_chroot(
-            state,
-            [
-                "bash",
-                "-lc",
-                f"mkdir -p /home/{config.username}/.config/niri && "
-                f"cp /usr/share/niri/default-config.kdl /home/{config.username}/.config/niri/config.kdl 2>/dev/null || true && "
-                f'echo \'spawn-at-startup "qs" "-c" "noctalia-shell"\' >> /home/{config.username}/.config/niri/config.kdl && '
-                f"chown -R {config.username}:{config.username} /home/{config.username}/.config",
-            ],
-            phase="niri-config",
-        )
     setup_graphical_target(state)
 
 
@@ -1402,6 +1389,19 @@ def create_users(state: State) -> None:
         input_text=f"{config.username}:{config.user_password or '<unset>'}\n",
         display_command=f"chroot /mnt chpasswd <redacted:{config.username}>",
     )
+    if config.desktop == "niri-noctalia":
+        run_in_chroot(
+            state,
+            [
+                "bash",
+                "-lc",
+                f"mkdir -p /home/{config.username}/.config/niri && "
+                f"cp /usr/share/niri/default-config.kdl /home/{config.username}/.config/niri/config.kdl 2>/dev/null || true && "
+                f'echo \'spawn-at-startup "qs" "-c" "noctalia-shell"\' >> /home/{config.username}/.config/niri/config.kdl && '
+                f"chown -R {config.username}:{config.username} /home/{config.username}/.config",
+            ],
+            phase="niri-config",
+        )
 
 
 def install_bootloader(state: State) -> None:
