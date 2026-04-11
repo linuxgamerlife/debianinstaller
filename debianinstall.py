@@ -3,16 +3,14 @@ from __future__ import annotations
 
 import argparse
 import getpass
-import json
 import os
 import re
 import shlex
 import subprocess
 import sys
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from shutil import which
-from typing import Any
 
 VERSION = 'v0.1.0'
 BANNER_URL = 'https://github.com/linuxgamerlife/debianinstaller'
@@ -100,7 +98,6 @@ class Config:
     boot_mode: str = 'uefi'
     mode: str = 'apply'
     confirm_disk: str | None = None
-    state_file: str = '/var/tmp/debianinstall-state.json'
     log_file: str | None = None
     skip_vm_check: bool = False
     filesystem: str = 'ext4'          # ext4 / btrfs / xfs
@@ -154,7 +151,6 @@ class Config:
 @dataclass(slots=True)
 class State:
     config: Config
-    completed_phases: list[str] = field(default_factory=list)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -166,20 +162,12 @@ def main(argv: list[str] | None = None) -> int:
     print()
 
     try:
-        if args.resume:
-            config, completed = load_state(Path(args.state_file))
-            if args.confirm_disk:
-                config.confirm_disk = args.confirm_disk
-            if args.log_file:
-                config.log_file = args.log_file
-        else:
-            config = config_from_args(args)
-            completed = []
+        config = config_from_args(args)
 
         if args.interactive or not args.disk:
             config = run_interactive_setup(config)
 
-        if config.execute and 'users' not in completed:
+        if config.execute:
             config = ensure_passwords(config)
 
         if config.execute:
@@ -193,7 +181,7 @@ def main(argv: list[str] | None = None) -> int:
                 return 0
 
         validate_config(config)
-        state = State(config=config, completed_phases=completed)
+        state = State(config=config)
         print(render_summary(state))
         warnings = collect_warnings(config)
         run(state)
@@ -222,10 +210,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--user-password', help='primary user password for apply mode')
     parser.add_argument('--package-profile', choices=sorted(PACKAGE_PROFILES), help='base package profile')
     parser.add_argument('--confirm-disk', help='must exactly match --disk to confirm destructive install')
-    parser.add_argument('--state-file', default='/var/tmp/debianinstall-state.json')
     parser.add_argument('--log-file', help='optional command log')
     parser.add_argument('--interactive', action='store_true', help='launch interactive setup')
-    parser.add_argument('--resume', action='store_true', help='resume from saved state file')
     return parser
 
 
@@ -238,7 +224,6 @@ def config_from_args(args: argparse.Namespace) -> Config:
         user_password=args.user_password,
         package_profile=args.package_profile or 'standard-tty',
         confirm_disk=args.confirm_disk,
-        state_file=args.state_file,
         log_file=args.log_file,
     )
 
@@ -282,26 +267,22 @@ def run_interactive_setup(config: Config) -> Config:
     print('  standard-tty — adds networking, SSH, curl, wget, vim')
     config.package_profile = prompt_profile(config.package_profile)
 
-    print('\nStep 5: State file')
-    print('  The state file records completed phases so the install can resume if interrupted.')
-    config.state_file = prompt_text('State file', config.state_file)
-
-    print('\nStep 6: Filesystem')
+    print('\nStep 5: Filesystem')
     config.filesystem = prompt_filesystem(config.filesystem)
 
-    print('\nStep 7: Swap')
+    print('\nStep 6: Swap')
     config = prompt_swap(config)
 
-    print('\nStep 8: Separate /home partition?')
+    print('\nStep 7: Separate /home partition?')
     config = prompt_home(config)
 
-    print('\nStep 9: Audio')
+    print('\nStep 8: Audio')
     config.audio = prompt_audio(config.audio)
 
-    print('\nStep 10: Network backend')
+    print('\nStep 9: Network backend')
     config.network_backend = prompt_network(config.network_backend)
 
-    print('\nStep 11: Desktop environment')
+    print('\nStep 10: Desktop environment')
     config.desktop = prompt_desktop(config.desktop)
 
     while True:
@@ -328,18 +309,16 @@ def run_interactive_setup(config: Config) -> Config:
             elif n == 4:
                 config.package_profile = prompt_profile(config.package_profile)
             elif n == 5:
-                config.state_file = prompt_text('State file', config.state_file)
-            elif n == 6:
                 config.filesystem = prompt_filesystem(config.filesystem)
-            elif n == 7:
+            elif n == 6:
                 config = prompt_swap(config)
-            elif n == 8:
+            elif n == 7:
                 config = prompt_home(config)
-            elif n == 9:
+            elif n == 8:
                 config.audio = prompt_audio(config.audio)
-            elif n == 10:
+            elif n == 9:
                 config.network_backend = prompt_network(config.network_backend)
-            elif n == 11:
+            elif n == 10:
                 config.desktop = prompt_desktop(config.desktop)
         else:
             print('Invalid choice.')
@@ -362,13 +341,12 @@ def render_summary_menu(config: Config) -> str:
         f' 2. hostname:         {config.hostname}',
         f' 3. username:         {config.username}',
         f' 4. package profile:  {config.package_profile}',
-        f' 5. state file:       {config.state_file}',
-        f' 6. filesystem:       {config.filesystem}',
-        f' 7. swap:             {swap_display}',
-        f' 8. separate /home:   {home_display}',
-        f' 9. audio:            {config.audio}',
-        f'10. network backend:  {config.network_backend}',
-        f'11. desktop:          {config.desktop}',
+        f' 5. filesystem:       {config.filesystem}',
+        f' 6. swap:             {swap_display}',
+        f' 7. separate /home:   {home_display}',
+        f' 8. audio:            {config.audio}',
+        f' 9. network backend:  {config.network_backend}',
+        f'10. desktop:          {config.desktop}',
     ])
 
 
@@ -403,7 +381,7 @@ def prompt_home(config: Config) -> Config:
         hint = f' (disk is {disk_size})' if disk_size else ''
         print(f'  Root partition size{hint}. Home will take the rest of the disk.')
         while True:
-            value = input(f'Root partition size (e.g. 20G): ').strip()
+            value = input('Root partition size (e.g. 20G): ').strip()
             if value:
                 config.root_size = value
                 break
@@ -582,23 +560,16 @@ def render_summary(state: State) -> str:
             f'  hostname: {config.hostname}',
             f'  username: {config.username}',
             f'  package profile: {config.package_profile}',
-            f'  state file: {config.state_file}',
-            f'  completed phases: {", ".join(state.completed_phases) if state.completed_phases else "none"}',
         ]
     )
 
 
 def run(state: State) -> None:
-    save_state(state)
     if state.config.execute:
         install_live_prerequisites(state)
     try:
         for phase in PHASES:
-            if phase in state.completed_phases:
-                continue
             run_phase(phase, state)
-            state.completed_phases.append(phase)
-            save_state(state)
         if state.config.execute:
             print('\nAlmost there! A few final optional steps before we finish.')
             prompt_backports_kernel(state)
@@ -901,8 +872,9 @@ def build_from_source(state: State) -> None:
         'Cargo also downloads crate dependencies from the internet,',
         'so a slow connection will add to the time.',
         '',
-        'Resume support is available via --resume if something',
-        'goes wrong.',
+        'If something goes wrong, you will need to reboot,',
+        'fdisk the drive to wipe it, and start the installer',
+        'from scratch.',
         '',
         'y  — continue with source build (recommended)',
         'n  — skip to TTY install, install a DE manually later',
@@ -1022,23 +994,23 @@ def write_fstab(state: State) -> None:
         blkid_vars.append(f'swap_uuid=$(/sbin/blkid -s UUID -o value {config.swap_partition})')
 
     if fs == 'btrfs':
-        root_line = f'UUID="${{root_uuid}}" / btrfs subvol=@,compress=zstd,noatime 0 0'
+        root_line = 'UUID="${root_uuid}" / btrfs subvol=@,compress=zstd,noatime 0 0'
     elif fs == 'xfs':
-        root_line = f'UUID="${{root_uuid}}" / xfs defaults 0 1'
+        root_line = 'UUID="${root_uuid}" / xfs defaults 0 1'
     else:
-        root_line = f'UUID="${{root_uuid}}" / ext4 defaults 0 1'
+        root_line = 'UUID="${root_uuid}" / ext4 defaults 0 1'
 
     fstab_lines = [
         root_line,
-        f'UUID="${{efi_uuid}}" /boot/efi vfat umask=0077 0 1',
+        'UUID="${efi_uuid}" /boot/efi vfat umask=0077 0 1',
     ]
 
     if fs == 'btrfs' and not config.separate_home:
-        fstab_lines.append(f'UUID="${{root_uuid}}" /home btrfs subvol=@home,compress=zstd,noatime 0 0')
+        fstab_lines.append('UUID="${root_uuid}" /home btrfs subvol=@home,compress=zstd,noatime 0 0')
     if config.home_partition:
-        fstab_lines.append(f'UUID="${{home_uuid}}" /home ext4 defaults 0 2')
+        fstab_lines.append('UUID="${home_uuid}" /home ext4 defaults 0 2')
     if config.swap_partition:
-        fstab_lines.append(f'UUID="${{swap_uuid}}" none swap sw 0 0')
+        fstab_lines.append('UUID="${swap_uuid}" none swap sw 0 0')
     if config.swap_type == 'swapfile':
         fstab_lines.append('/swapfile none swap sw 0 0')
 
@@ -1163,29 +1135,6 @@ def append_log(config: Config, line: str) -> None:
     with path.open('a', encoding='utf-8') as handle:
         handle.write(line)
         handle.write('\n')
-
-
-def save_state(state: State) -> None:
-    path = Path(state.config.state_file)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    data = {
-        'config': serialize_config(state.config),
-        'completed_phases': state.completed_phases,
-    }
-    path.write_text(json.dumps(data, indent=2), encoding='utf-8')
-
-
-def load_state(path: Path) -> tuple[Config, list[str]]:
-    payload = json.loads(path.read_text(encoding='utf-8'))
-    config = Config(**payload['config'])
-    return config, list(payload.get('completed_phases', []))
-
-
-def serialize_config(config: Config) -> dict[str, Any]:
-    data = asdict(config)
-    data['root_password'] = None
-    data['user_password'] = None
-    return data
 
 
 def looks_like_vm() -> bool:
