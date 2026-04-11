@@ -956,6 +956,8 @@ def build_from_source(state: State) -> None:
         'mkdir -p /usr/lib/systemd/user',
         'install -Dm644 resources/niri.service /usr/lib/systemd/user/niri.service',
         'install -Dm644 resources/niri-shutdown.target /usr/lib/systemd/user/niri-shutdown.target',
+        'mkdir -p /usr/share/niri',
+        'install -Dm644 resources/default-config.kdl /usr/share/niri/default-config.kdl',
         'rm -rf /tmp/niri-build',
     ])
     run_in_chroot(state, ['bash', '-c', niri_script], phase='build-niri')
@@ -997,10 +999,10 @@ def configure_system(state: State) -> None:
     run_in_chroot(state, ['bash', '-lc', 'systemctl mask cups 2>/dev/null || true'], phase='mask-cups')
     run_in_chroot(state, ['bash', '-lc', 'systemctl mask cups-browsed 2>/dev/null || true'], phase='mask-cups')
     if config.desktop == 'niri-noctalia':
-        niri_config = 'spawn-at-startup "noctalia-shell"\n'
         run_in_chroot(state, ['bash', '-lc',
             f"mkdir -p /home/{config.username}/.config/niri && "
-            f"cat > /home/{config.username}/.config/niri/config.kdl <<'EOF'\n{niri_config}EOF\n"
+            f"cp /usr/share/niri/default-config.kdl /home/{config.username}/.config/niri/config.kdl && "
+            f"echo 'spawn-at-startup \"qs\" \"-c\" \"noctalia-shell\"' >> /home/{config.username}/.config/niri/config.kdl && "
             f"chown -R {config.username}:{config.username} /home/{config.username}/.config"],
             phase='niri-config')
     setup_graphical_target(state)
