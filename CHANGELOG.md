@@ -10,7 +10,7 @@
 - When `niri-noctalia` is selected:
   - Noctalia apt repo added to sources (GPG key fetched on host before chroot)
   - `niri`, `noctalia-shell`, `greetd` installed
-  - Runtime deps: `xwayland-satellite`, `libgl1-mesa-dri`
+  - Runtime deps: `libgl1-mesa-dri`
   - Default config utilities: `alacritty`, `fuzzel`
   - Desktop integration: `xdg-desktop-portal-gtk`, `swayidle`
   - greetd configured to autologin the created user with `niri-session`

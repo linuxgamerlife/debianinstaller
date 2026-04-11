@@ -139,7 +139,6 @@ When **niri-noctalia** is selected, the following are installed from the Noctali
 | `niri` | Scrollable-tiling Wayland compositor |
 | `noctalia-shell` | Full desktop shell — bar, dock, notifications, lock screen, settings |
 | `greetd` | Display manager — autologins your user into `niri-session` |
-| `xwayland-satellite` | X11 app support under Wayland |
 | `libgl1-mesa-dri` | GPU drivers required for rendering |
 | `alacritty` | Terminal — bound to Super+T in niri's default config |
 | `fuzzel` | App launcher — bound to Super+D in niri's default config |
