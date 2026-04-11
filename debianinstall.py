@@ -900,7 +900,7 @@ def build_from_source(state: State) -> None:
         'libseat-dev', 'libpipewire-0.3-dev', 'libpango1.0-dev',
         'libdisplay-info-dev', 'libcairo2-dev',
         # xwayland-satellite build deps
-        'libxcb-dev', 'libxcb-composite0-dev', 'libxcb-damage0-dev',
+        'libxcb1-dev', 'libxcb-composite0-dev', 'libxcb-damage0-dev',
         'libxcb-xfixes0-dev', 'libxcb-render0-dev', 'libxcb-shape0-dev',
         # xwayland runtime (launched by xwayland-satellite)
         'xwayland',
