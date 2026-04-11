@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.1.0 — 2026-04-11 ⚠️ UNTESTED
+
+### Changed
+
+- **New direction** — installer is now focused on Niri + Noctalia as the desktop stack, with TTY-only as the alternative. tasksel is gone from the install flow.
+- Replaced tasksel DE selection with a dedicated **desktop** wizard step (step 11): `none` (TTY) or `niri-noctalia`
+- Removed `tasksel` from all package profiles
+- When `niri-noctalia` is selected: Noctalia apt repo added to sources, `noctalia-shell` and `greetd` installed, greetd configured to autologin the created user with `niri-session`, `graphical.target` set as default
+- When `none` is selected: `multi-user.target` set, no display stack installed
+- README updated to reflect new direction; added post-install instructions for installing other DEs manually (minimal) or via tasksel (more complete)
+
+---
+
 ## v0.0.9 — 2026-04-06 ⚠️ UNTESTED
 
 ### Added

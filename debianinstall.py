@@ -14,7 +14,7 @@ from pathlib import Path
 from shutil import which
 from typing import Any
 
-VERSION = 'v0.0.9'
+VERSION = 'v0.1.0'
 BANNER_URL = 'https://github.com/linuxgamerlife/debianinstaller'
 
 PHASES: tuple[str, ...] = (
@@ -38,7 +38,6 @@ PACKAGE_PROFILES: dict[str, list[str]] = {
         'locales',
         'keyboard-configuration',
         'console-setup',
-        'tasksel',
     ],
     'standard-tty': [
         'sudo',
@@ -52,7 +51,6 @@ PACKAGE_PROFILES: dict[str, list[str]] = {
         'vim-tiny',
         'network-manager',
         'openssh-server',
-        'tasksel',
     ],
 }
 
@@ -110,6 +108,7 @@ class Config:
     home_size: str = ''               # empty = rest of disk
     audio: str = 'pipewire'           # pipewire / pulseaudio / none
     network_backend: str = 'networkmanager'  # networkmanager / systemd-networkd
+    desktop: str = 'none'            # none / niri-noctalia
 
     @property
     def execute(self) -> bool:
@@ -299,6 +298,9 @@ def run_interactive_setup(config: Config) -> Config:
     print('\nStep 10: Network backend')
     config.network_backend = prompt_network(config.network_backend)
 
+    print('\nStep 11: Desktop environment')
+    config.desktop = prompt_desktop(config.desktop)
+
     while True:
         os.system('clear')
         print(render_banner())
@@ -334,6 +336,8 @@ def run_interactive_setup(config: Config) -> Config:
                 config.audio = prompt_audio(config.audio)
             elif n == 10:
                 config.network_backend = prompt_network(config.network_backend)
+            elif n == 11:
+                config.desktop = prompt_desktop(config.desktop)
         else:
             print('Invalid choice.')
 
@@ -361,6 +365,7 @@ def render_summary_menu(config: Config) -> str:
         f' 8. separate /home:   {home_display}',
         f' 9. audio:            {config.audio}',
         f'10. network backend:  {config.network_backend}',
+        f'11. desktop:          {config.desktop}',
     ])
 
 
@@ -429,6 +434,16 @@ def prompt_network(current: str) -> str:
     print('  2. systemd-networkd — lightweight, good for servers/minimal installs')
     choice = input(f'Network backend [current: {current}]: ').strip()
     return {'1': 'networkmanager', '2': 'systemd-networkd'}.get(choice, current if choice == '' else (choice if choice in ('networkmanager', 'systemd-networkd') else current))
+
+
+def prompt_desktop(current: str) -> str:
+    print('  1. none          — no desktop, boot to TTY')
+    print('  2. niri-noctalia — Niri compositor with Noctalia shell')
+    choice = input(f'Desktop [current: {current}]: ').strip()
+    return {'1': 'none', '2': 'niri-noctalia'}.get(
+        choice,
+        current if choice == '' else (choice if choice in ('none', 'niri-noctalia') else current),
+    )
 
 
 def confirm_non_vm_install() -> bool:
@@ -750,18 +765,35 @@ def write_sources(state: State) -> None:
     run_command(['rm', '-f', f'{target}/etc/apt/sources.list'], phase='sources-cleanup', state=state)
     # Enable i386 for Steam and other 32-bit software
     run_in_chroot(state, ['dpkg', '--add-architecture', 'i386'], phase='add-i386')
+
+    if config.desktop == 'niri-noctalia':
+        # Add Noctalia apt repo (provides noctalia-shell and niri)
+        run_in_chroot(state, ['bash', '-c',
+            'curl -fsSL https://pkg.noctalia.dev/gpg.key | gpg --dearmor -o /etc/apt/keyrings/noctalia.gpg'],
+            phase='noctalia-gpg-key')
+        noctalia_sources = '\n'.join([
+            'Types: deb',
+            'URIs: https://pkg.noctalia.dev/apt',
+            f'Suites: {release}',
+            'Components: main',
+            'Signed-By: /etc/apt/keyrings/noctalia.gpg',
+        ])
+        run_command(
+            ['bash', '-c', f"cat > {target}/etc/apt/sources.list.d/noctalia.sources <<'EOF'\n{noctalia_sources}\nEOF"],
+            phase='sources-noctalia', state=state,
+        )
+
     run_in_chroot(state, ['apt', 'update'], phase='sources-apt-update')
 
 
 def interactive_config(state: State) -> None:
-    """Run interactive debconf dialogs inside the chroot for locale, timezone, keyboard, and DE selection."""
+    """Run interactive debconf dialogs inside the chroot for timezone and keyboard layout."""
     config = state.config
     target = config.target_mount
     # These must run without DEBIAN_FRONTEND=noninteractive so the ncurses UI appears
     for cmd, phase in [
         (['dpkg-reconfigure', 'tzdata'], 'interactive-tzdata'),
         (['dpkg-reconfigure', 'keyboard-configuration'], 'interactive-keyboard'),
-        (['tasksel'], 'interactive-tasksel'),
     ]:
         chroot_cmd = ['chroot', target, *cmd]
         rendered = render_command(chroot_cmd)
@@ -775,30 +807,23 @@ def interactive_config(state: State) -> None:
 
 def setup_graphical_target(state: State) -> None:
     config = state.config
-    target = config.target_mount
-    dm_candidates = [
-        ('sddm', 'sddm'),       # KDE, LXQt
-        ('gdm3', 'gdm3'),       # GNOME
-        ('lightdm', 'lightdm'), # XFCE, MATE, Cinnamon, LXDE
-    ]
-    dm_service = None
-    if config.execute:
-        for pkg, service in dm_candidates:
-            result = subprocess.run(
-                ['chroot', target, 'dpkg-query', '-W', '-f=${Status}', pkg],
-                capture_output=True, text=True,
-            )
-            if 'install ok installed' in result.stdout:
-                dm_service = service
-                break
-        if dm_service:
-            run_in_chroot(state, ['systemctl', 'enable', dm_service], phase='enable-dm')
-            run_in_chroot(state, ['systemctl', 'set-default', 'graphical.target'], phase='graphical-target')
-        else:
-            run_in_chroot(state, ['systemctl', 'set-default', 'multi-user.target'], phase='default-target')
-            print('[setup-graphical] no display manager detected — set multi-user.target')
+    if config.desktop == 'niri-noctalia':
+        # Configure greetd to autologin with niri-session
+        greetd_config = '\n'.join([
+            '[terminal]',
+            'vt = 1',
+            '',
+            '[default_session]',
+            'command = "niri-session"',
+            f'user = "{config.username}"',
+        ])
+        run_in_chroot(state, ['bash', '-c',
+            f"mkdir -p /etc/greetd && cat > /etc/greetd/config.toml <<'EOF'\n{greetd_config}\nEOF"],
+            phase='greetd-config')
+        run_in_chroot(state, ['systemctl', 'enable', 'greetd'], phase='enable-dm')
+        run_in_chroot(state, ['systemctl', 'set-default', 'graphical.target'], phase='graphical-target')
     else:
-        print('[setup-graphical] (plan) would detect display manager and enable graphical.target if found')
+        run_in_chroot(state, ['systemctl', 'set-default', 'multi-user.target'], phase='default-target')
 
 
 def install_packages(state: State) -> None:
@@ -826,6 +851,9 @@ def install_packages(state: State) -> None:
         packages.remove('network-manager')
 
     run_in_chroot(state, ['apt', 'install', '-y', *packages], phase='install-packages')
+
+    if config.desktop == 'niri-noctalia':
+        run_in_chroot(state, ['apt', 'install', '-y', 'noctalia-shell', 'greetd'], phase='install-desktop')
 
 
 def configure_system(state: State) -> None:
