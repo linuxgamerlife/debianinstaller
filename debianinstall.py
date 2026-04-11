@@ -891,8 +891,9 @@ def build_from_source(state: State) -> None:
         '',
         'The compilation step will take the longest.',
         'It will look like the installer is stuck — for example:',
-        '  484/485: Compiling niri',
-        'This is normal. It is just compiling. Do not interrupt it.',
+        '  Building [===========>] 484/485: niri(bin)',
+        '  Building [===========>] 181/182: xwayland-satellite(bin)',
+        'This is normal. It is just building. Do not interrupt it.',
         '',
         'Speed depends on your CPU. A fast machine may take a few',
         'minutes. A slow one could take considerably longer.',
@@ -995,6 +996,13 @@ def configure_system(state: State) -> None:
     # Disable CUPS if installed — hangs at boot waiting for a printer that doesn't exist
     run_in_chroot(state, ['bash', '-lc', 'systemctl mask cups 2>/dev/null || true'], phase='mask-cups')
     run_in_chroot(state, ['bash', '-lc', 'systemctl mask cups-browsed 2>/dev/null || true'], phase='mask-cups')
+    if config.desktop == 'niri-noctalia':
+        niri_config = 'spawn-at-startup "noctalia-shell"\n'
+        run_in_chroot(state, ['bash', '-lc',
+            f"mkdir -p /home/{config.username}/.config/niri && "
+            f"cat > /home/{config.username}/.config/niri/config.kdl <<'EOF'\n{niri_config}EOF\n"
+            f"chown -R {config.username}:{config.username} /home/{config.username}/.config"],
+            phase='niri-config')
     setup_graphical_target(state)
 
 
